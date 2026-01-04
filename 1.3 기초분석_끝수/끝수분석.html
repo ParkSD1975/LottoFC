@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html class="light" lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Lotto Lab - 끝수</title>
+    <link as="style" crossorigin="" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "active-green": "#E6FFED",
+                        "active-text": "#16A34A",
+                        "dark-navy": "#1e3a8a",
+                        "dark-red": "#991b1b",
+                        "ai-bg": "#F5F3FF",
+                        "ai-header": "#8B5CF6",
+                    },
+                    fontFamily: {
+                        "sans": ["Pretendard", "Inter", "system-ui", "sans-serif"],
+                    },
+                },
+            },
+        }
+    </script>
+    
+    <style>
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: transparent;
+            outline: none;
+            position: relative;
+            z-index: 10;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #16A34A;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .cell-colored {
+            padding: 0;
+            height: 100%;
+        }
+        
+        .cell-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 48px;
+            font-weight: bold;
+            font-size: 1.125rem;
+        }
+
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+    </style>
+</head>
+<body class="bg-[#F9FAFB] font-sans antialiased">
+    <div class="flex flex-col h-screen w-full">
+        <header class="bg-white border-b border-gray-200 h-16 flex items-center px-6 flex-shrink-0 justify-between">
+            <div class="flex items-center gap-2">
+                <div class="bg-green-100 p-1.5 rounded-lg">
+                    <span class="material-symbols-outlined text-green-500 text-2xl filled">casino</span>
+                </div>
+                <span class="text-lg font-bold tracking-tight text-gray-900">Lotto Lab</span>
+            </div>
+            
+            <nav class="flex items-center gap-1">
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-colors">대시보드</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-colors">당첨번호</a>
+                <a href="#" class="px-3 py-2 text-sm font-bold text-gray-900 border-b-2 border-gray-900 rounded-none transition-colors">기초분석</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-colors">커스텀분석</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-colors">AI분석</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-colors">필터</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-colors">조합</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-colors">AI 조합</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-colors">출력</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-colors">검증</a>
+            </nav>
+
+            <div>
+                <button class="flex items-center gap-1.5 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm font-bold shadow-sm transition-colors">
+                    <span class="material-symbols-outlined text-lg">add</span>
+                    새 분석
+                </button>
+            </div>
+        </header>
+
+        <div class="flex flex-1 overflow-hidden">
+            <aside class="w-56 bg-white border-r border-gray-200 overflow-y-auto custom-scrollbar flex-shrink-0">
+                <div class="p-4">
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">기초분석</h3>
+                    <nav class="space-y-1">
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">calculate</span>
+                            총합
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">dialpad</span>
+                            끝수합
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-active-green text-active-text rounded-lg">
+                            <span class="material-symbols-outlined text-lg filled">format_list_numbered</span>
+                            끝수
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">auto_graph</span>
+                            AC값
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">pie_chart</span>
+                            홀짝 비율
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">trending_up</span>
+                            저고 비율
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">functions</span>
+                            소수
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">science</span>
+                            합성수
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">square</span>
+                            제곱수
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">content_copy</span>
+                            동형수
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">grid_on</span>
+                            배수
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">line_axis</span>
+                            연번
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">history</span>
+                            이월수
+                        </a>
+
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">bar_chart</span>
+                            번호별 출현 통계
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">local_fire_department</span>
+                            핫콜드
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">visibility_off</span>
+                            미출현 그룹
+                        </a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">insights</span>
+                            회귀분석
+                        </a>
+                    </nav>
+                </div>
+            </aside>
+
+            <main class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <div class="max-w-7xl mx-auto space-y-6">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 mb-1">끝수 분석</h1>
+                        <p class="text-sm text-gray-600">0끝수 ~ 9끝수의 출현 통계 및 필터링을 제공합니다.</p>
+                    </div>
+
+                    <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                        <div class="grid grid-cols-5 gap-3 mb-8">
+                            <div class="bg-red-50 rounded-lg p-3 border border-red-100">
+                                <div class="text-xs font-semibold text-red-900 text-center mb-1">0끝</div>
+                                <p class="text-lg font-bold text-red-900 text-center" id="digit_0">0.0%</p>
+                            </div>
+                            <div class="bg-orange-50 rounded-lg p-3 border border-orange-100">
+                                <div class="text-xs font-semibold text-orange-900 text-center mb-1">1끝</div>
+                                <p class="text-lg font-bold text-orange-900 text-center" id="digit_1">0.0%</p>
+                            </div>
+                            <div class="bg-yellow-50 rounded-lg p-3 border border-yellow-100">
+                                <div class="text-xs font-semibold text-yellow-900 text-center mb-1">2끝</div>
+                                <p class="text-lg font-bold text-yellow-900 text-center" id="digit_2">0.0%</p>
+                            </div>
+                            <div class="bg-lime-50 rounded-lg p-3 border border-lime-100">
+                                <div class="text-xs font-semibold text-lime-900 text-center mb-1">3끝</div>
+                                <p class="text-lg font-bold text-lime-900 text-center" id="digit_3">0.0%</p>
+                            </div>
+                            <div class="bg-green-50 rounded-lg p-3 border border-green-100">
+                                <div class="text-xs font-semibold text-green-900 text-center mb-1">4끝</div>
+                                <p class="text-lg font-bold text-green-900 text-center" id="digit_4">0.0%</p>
+                            </div>
+                            <div class="bg-cyan-50 rounded-lg p-3 border border-cyan-100">
+                                <div class="text-xs font-semibold text-cyan-900 text-center mb-1">5끝</div>
+                                <p class="text-lg font-bold text-cyan-900 text-center" id="digit_5">0.0%</p>
+                            </div>
+                            <div class="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                                <div class="text-xs font-semibold text-blue-900 text-center mb-1">6끝</div>
+                                <p class="text-lg font-bold text-blue-900 text-center" id="digit_6">0.0%</p>
+                            </div>
+                            <div class="bg-indigo-50 rounded-lg p-3 border border-indigo-100">
+                                <div class="text-xs font-semibold text-indigo-900 text-center mb-1">7끝</div>
+                                <p class="text-lg font-bold text-indigo-900 text-center" id="digit_7">0.0%</p>
+                            </div>
+                            <div class="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                                <div class="text-xs font-semibold text-purple-900 text-center mb-1">8끝</div>
+                                <p class="text-lg font-bold text-purple-900 text-center" id="digit_8">0.0%</p>
+                            </div>
+                            <div class="bg-fuchsia-50 rounded-lg p-3 border border-fuchsia-100">
+                                <div class="text-xs font-semibold text-fuchsia-900 text-center mb-1">9끝</div>
+                                <p class="text-lg font-bold text-fuchsia-900 text-center" id="digit_9">0.0%</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-bold text-gray-900">분석 회차 범위</h3>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm text-gray-600">설정 범위:</span>
+                                    <span id="rangeDisplay" class="text-sm font-bold text-green-600">100회</span>
+                                </div>
+                            </div>
+                            <div class="relative">
+                                <div class="relative h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                                    <div id="rangeProgress" class="absolute left-0 top-0 h-full bg-gradient-to-r from-green-400 to-green-600 transition-all duration-300" style="width: 8.3%"></div>
+                                </div>
+                                <input type="range" id="rangeSlider" min="1" max="1203" value="100" 
+                                    class="w-full h-2 bg-transparent appearance-none cursor-pointer"
+                                    style="position: absolute; top: 0; left: 0; opacity: 0;"
+                                    oninput="updateRange(this.value)">
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500 mt-2">
+                                <span>최근 1회</span>
+                                <span>전체 1203회</span>
+                            </div>
+                            <div class="flex gap-2 mt-4">
+                                <button onclick="setRange(50)" id="preset50" class="px-4 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">50회</button>
+                                <button onclick="setRange(100)" id="preset100" class="px-4 py-2 text-sm font-medium bg-green-500 text-white rounded-lg">100회</button>
+                                <button onclick="setRange(500)" id="preset500" class="px-4 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">500회</button>
+                                <button onclick="setRange(1203)" id="presetAll" class="px-4 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">전체</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-ai-bg rounded-xl p-6 border border-purple-100 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-purple-600">psychology</span>
+                                <h3 class="text-lg font-bold text-gray-900">AI 끝수 분석</h3>
+                                <span class="px-2 py-0.5 text-xs font-bold text-white bg-purple-500 rounded-full">Gemini Pro</span>
+                            </div>
+                            <button onclick="updateStats()" class="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                                <span class="material-symbols-outlined text-sm">refresh</span>
+                                새로고침
+                            </button>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="material-symbols-outlined text-red-500 text-lg">trending_up</span>
+                                    <h4 class="text-sm font-bold text-gray-900">종합 추세 분석</h4>
+                                </div>
+                                <p id="aiTrendText" class="text-sm text-gray-700 leading-relaxed pl-7 text-justify">
+                                    데이터 분석 중...
+                                </p>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="material-symbols-outlined text-green-500 text-lg">insights</span>
+                                    <h4 class="text-sm font-bold text-gray-900">패턴 심층 인사이트</h4>
+                                </div>
+                                <p id="aiPatternText" class="text-sm text-gray-700 leading-relaxed pl-7 text-justify">
+                                    데이터 분석 중...
+                                </p>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="material-symbols-outlined text-blue-500 text-lg">lightbulb</span>
+                                    <h4 class="text-sm font-bold text-gray-900">전략적 제안</h4>
+                                </div>
+                                <p id="aiRecommendText" class="text-sm text-gray-700 leading-relaxed pl-7 text-justify">
+                                    데이터 분석 중...
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 pt-4 border-t border-purple-200 text-center">
+                            <p class="text-xs text-gray-400">ⓘ 이 분석은 시뮬레이션된 AI 결과이며, 실제 API 연동 시 실시간 심층 분석이 제공됩니다.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900 mb-1">필터</h3>
+                                <p class="text-sm text-gray-600">조합 생성 시 포함할 각 끝수의 개수 범위를 지정하세요.</p>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <label class="flex items-center gap-2 cursor-pointer select-none">
+                                    <input type="checkbox" id="filterEnabled" class="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300" checked>
+                                    <span class="text-sm font-medium text-gray-700">필터 적용</span>
+                                </label>
+                                <button onclick="goToFilterPage()" class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors">
+                                    <span class="material-symbols-outlined text-lg">filter_alt</span>
+                                    필터 페이지 가기
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-5 gap-3">
+                            <div class="flex flex-col items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <span class="text-xs font-bold text-gray-700 mb-2">0끝</span>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" id="filter0Min" min="0" max="4" value="0" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(0)">
+                                    <span class="text-gray-400 text-xs">~</span>
+                                    <input type="number" id="filter0Max" min="0" max="4" value="4" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(0)">
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <span class="text-xs font-bold text-gray-700 mb-2">1끝</span>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" id="filter1Min" min="0" max="5" value="0" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(1)">
+                                    <span class="text-gray-400 text-xs">~</span>
+                                    <input type="number" id="filter1Max" min="0" max="5" value="5" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(1)">
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <span class="text-xs font-bold text-gray-700 mb-2">2끝</span>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" id="filter2Min" min="0" max="5" value="0" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(2)">
+                                    <span class="text-gray-400 text-xs">~</span>
+                                    <input type="number" id="filter2Max" min="0" max="5" value="5" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(2)">
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <span class="text-xs font-bold text-gray-700 mb-2">3끝</span>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" id="filter3Min" min="0" max="5" value="0" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(3)">
+                                    <span class="text-gray-400 text-xs">~</span>
+                                    <input type="number" id="filter3Max" min="0" max="5" value="5" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(3)">
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <span class="text-xs font-bold text-gray-700 mb-2">4끝</span>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" id="filter4Min" min="0" max="5" value="0" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(4)">
+                                    <span class="text-gray-400 text-xs">~</span>
+                                    <input type="number" id="filter4Max" min="0" max="5" value="5" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(4)">
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <span class="text-xs font-bold text-gray-700 mb-2">5끝</span>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" id="filter5Min" min="0" max="5" value="0" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(5)">
+                                    <span class="text-gray-400 text-xs">~</span>
+                                    <input type="number" id="filter5Max" min="0" max="5" value="5" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(5)">
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <span class="text-xs font-bold text-gray-700 mb-2">6끝</span>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" id="filter6Min" min="0" max="4" value="0" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(6)">
+                                    <span class="text-gray-400 text-xs">~</span>
+                                    <input type="number" id="filter6Max" min="0" max="4" value="4" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(6)">
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <span class="text-xs font-bold text-gray-700 mb-2">7끝</span>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" id="filter7Min" min="0" max="4" value="0" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(7)">
+                                    <span class="text-gray-400 text-xs">~</span>
+                                    <input type="number" id="filter7Max" min="0" max="4" value="4" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(7)">
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <span class="text-xs font-bold text-gray-700 mb-2">8끝</span>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" id="filter8Min" min="0" max="4" value="0" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(8)">
+                                    <span class="text-gray-400 text-xs">~</span>
+                                    <input type="number" id="filter8Max" min="0" max="4" value="4" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(8)">
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <span class="text-xs font-bold text-gray-700 mb-2">9끝</span>
+                                <div class="flex items-center gap-1.5">
+                                    <input type="number" id="filter9Min" min="0" max="4" value="0" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(9)">
+                                    <span class="text-gray-400 text-xs">~</span>
+                                    <input type="number" id="filter9Max" min="0" max="4" value="4" class="w-10 h-8 text-center border border-gray-300 rounded text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500" onchange="updateDigitFilter(9)">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 flex justify-end">
+                            <button onclick="resetFilters()" class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition-colors">
+                                초기화
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900 mb-1">회차별 당첨번호 및 끝수 출현</h3>
+                                <p class="text-sm text-gray-600">총 <span id="displayedCount" class="font-semibold text-green-600">0</span>개 회차 표시</p>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div class="overflow-auto custom-scrollbar" style="max-height: 600px;">
+                                <table class="w-full text-center border-collapse">
+                                    <thead class="sticky top-0 z-10 shadow-sm">
+                                        <tr class="bg-gray-100">
+                                            <th class="py-2 px-2 w-20 text-xs font-semibold text-gray-600 border-r border-gray-200" rowspan="2">회차</th>
+                                            <th class="py-2 px-2 text-xs font-semibold text-gray-600 border-r border-gray-200" colspan="6">당첨번호</th>
+                                            <th class="py-2 px-2 w-16 text-xs font-semibold text-gray-600 border-r border-gray-200" rowspan="2">이월<br>끝수</th>
+                                            <th class="py-2 px-2 text-xs font-semibold text-gray-600" colspan="10">끝수 출현</th>
+                                        </tr>
+                                        <tr class="bg-gray-50">
+                                            <th class="py-1 w-14 text-xs font-normal text-gray-400 border-r border-gray-100">1</th>
+                                            <th class="py-1 w-14 text-xs font-normal text-gray-400 border-r border-gray-100">2</th>
+                                            <th class="py-1 w-14 text-xs font-normal text-gray-400 border-r border-gray-100">3</th>
+                                            <th class="py-1 w-14 text-xs font-normal text-gray-400 border-r border-gray-100">4</th>
+                                            <th class="py-1 w-14 text-xs font-normal text-gray-400 border-r border-gray-100">5</th>
+                                            <th class="py-1 w-14 text-xs font-normal text-gray-400 border-r border-gray-200">6</th>
+                                            <th class="py-1 w-12 text-xs font-normal text-gray-400 border-r border-gray-100">0끝</th>
+                                            <th class="py-1 w-12 text-xs font-normal text-gray-400 border-r border-gray-100">1끝</th>
+                                            <th class="py-1 w-12 text-xs font-normal text-gray-400 border-r border-gray-100">2끝</th>
+                                            <th class="py-1 w-12 text-xs font-normal text-gray-400 border-r border-gray-100">3끝</th>
+                                            <th class="py-1 w-12 text-xs font-normal text-gray-400 border-r border-gray-100">4끝</th>
+                                            <th class="py-1 w-12 text-xs font-normal text-gray-400 border-r border-gray-100">5끝</th>
+                                            <th class="py-1 w-12 text-xs font-normal text-gray-400 border-r border-gray-100">6끝</th>
+                                            <th class="py-1 w-12 text-xs font-normal text-gray-400 border-r border-gray-100">7끝</th>
+                                            <th class="py-1 w-12 text-xs font-normal text-gray-400 border-r border-gray-100">8끝</th>
+                                            <th class="py-1 w-12 text-xs font-normal text-gray-400">9끝</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="drawsList" class="divide-y divide-gray-100 bg-white">
+                                        </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // 로또 데이터 (초기 샘플 데이터)
+        const realLottoData = [
+            {"round": 1203, "numbers": [3, 6, 18, 29, 35, 39], "digitCounts": [0, 0, 0, 1, 0, 1, 1, 0, 1, 2]},
+            {"round": 1202, "numbers": [5, 12, 21, 33, 37, 40], "digitCounts": [1, 1, 1, 1, 0, 1, 0, 1, 0, 0]},
+            {"round": 1201, "numbers": [7, 9, 24, 27, 35, 36], "digitCounts": [0, 0, 0, 0, 1, 1, 1, 2, 0, 1]},
+            {"round": 1200, "numbers": [1, 2, 4, 16, 20, 32], "digitCounts": [1, 1, 2, 0, 1, 0, 1, 0, 0, 0]},
+            {"round": 1199, "numbers": [16, 24, 25, 30, 31, 32], "digitCounts": [1, 1, 1, 0, 1, 1, 1, 0, 0, 0]},
+            {"round": 1198, "numbers": [26, 30, 33, 38, 39, 41], "digitCounts": [1, 1, 0, 1, 0, 0, 1, 0, 1, 1]}
+        ];
+
+        // 더미 데이터 생성 로직 (1203회까지 채우기)
+        (function fillDummyData() {
+            const currentLength = realLottoData.length;
+            const targetLength = 1203;
+            
+            if (currentLength < targetLength) {
+                let lastRound = realLottoData[currentLength - 1].round;
+                for (let i = 0; i < (targetLength - currentLength); i++) {
+                    lastRound--;
+                    if (lastRound < 1) break;
+
+                    const nums = [];
+                    while(nums.length < 6){
+                        const r = Math.floor(Math.random() * 45) + 1;
+                        if(nums.indexOf(r) === -1) nums.push(r);
+                    }
+                    nums.sort((a,b)=>a-b);
+
+                    const dCounts = [0,0,0,0,0,0,0,0,0,0];
+                    for(let n of nums) {
+                        dCounts[n % 10]++;
+                    }
+
+                    realLottoData.push({
+                        "round": lastRound,
+                        "numbers": nums,
+                        "digitCounts": dCounts
+                    });
+                }
+            }
+        })();
+
+        // 전역 변수
+        let currentRange = 100;
+        let digitFilters = {
+            0: {min: 0, max: 4}, 1: {min: 0, max: 5}, 2: {min: 0, max: 5},
+            3: {min: 0, max: 5}, 4: {min: 0, max: 5}, 5: {min: 0, max: 5},
+            6: {min: 0, max: 4}, 7: {min: 0, max: 4}, 8: {min: 0, max: 4}, 9: {min: 0, max: 4}
+        };
+        let allData = [];
+
+        function initData() {
+            allData = realLottoData.map(draw => ({
+                round: draw.round,
+                numbers: draw.numbers,
+                digitCounts: draw.digitCounts
+            }));
+            
+            loadFilterSettings();
+        }
+
+        function updateStats() {
+            const data = allData.slice(0, currentRange);
+            const digitTotals = [0,0,0,0,0,0,0,0,0,0];
+            data.forEach(d => {
+                for (let i = 0; i < 10; i++) {
+                    digitTotals[i] += d.digitCounts[i];
+                }
+            });
+            const totalNumbers = data.length * 6;
+            
+            // 통계 계산
+            let maxPercent = -1;
+            let maxDigit = -1;
+            let minPercent = 101;
+            let minDigit = -1;
+            
+            let hotDigits = [];
+            let coldDigits = [];
+
+            // 빈도수 배열 생성 (정렬용)
+            let freqArr = [];
+
+            for (let i = 0; i < 10; i++) {
+                const percentVal = (digitTotals[i] / totalNumbers * 100);
+                const percentStr = percentVal.toFixed(1);
+                document.getElementById(`digit_${i}`).textContent = percentStr + '%';
+                
+                freqArr.push({digit: i, percent: percentVal, count: digitTotals[i]});
+
+                if (percentVal > maxPercent) {
+                    maxPercent = percentVal;
+                    maxDigit = i;
+                }
+                if (percentVal < minPercent) {
+                    minPercent = percentVal;
+                    minDigit = i;
+                }
+            }
+
+            // 정렬
+            freqArr.sort((a, b) => b.percent - a.percent);
+            hotDigits = freqArr.slice(0, 3).map(d => d.digit); // 상위 3개
+            coldDigits = freqArr.slice(7, 10).map(d => d.digit); // 하위 3개
+
+            // AI 분석 텍스트 생성 (고도화됨)
+            // 1. 종합 추세
+            document.getElementById('aiTrendText').innerHTML = 
+                `최근 <span class="font-bold text-gray-900">${currentRange}회차</span> 분석 결과, ` +
+                `가장 강력한 흐름을 보이는 끝수는 <span class="font-bold text-red-600">${maxDigit}끝</span>(약 ${maxPercent.toFixed(1)}%)입니다. ` +
+                `전체적으로 <span class="font-bold text-gray-800">${hotDigits.join(', ')}끝</span>이 상위권을 형성하며 시장을 주도하고 있는 반면, ` +
+                `<span class="font-bold text-blue-600">${coldDigits.join(', ')}끝</span>은 평균 이하의 출현 빈도를 보이며 침체기에 머물러 있습니다. ` +
+                `특히 <strong>${maxDigit}끝</strong>의 경우 직전 10회차 기준 상승세가 뚜렷하여 단기적인 과열 양상을 보입니다.`;
+            
+            // 2. 패턴 심층 인사이트
+            document.getElementById('aiPatternText').innerHTML = 
+                `데이터의 분산도를 고려할 때, 현재 끝수 분포는 <strong>${maxDigit}끝 쏠림 현상</strong>이 관측됩니다. ` +
+                `통계적 '평균 회귀 법칙'에 따르면, 이러한 불균형은 향후 5~10회차 내에 조정될 가능성이 큽니다. ` +
+                `가장 저조한 <span class="font-bold text-blue-600">${minDigit}끝</span>(약 ${minPercent.toFixed(1)}%)은 ` +
+                `과거 데이터 패턴상 <strong>반등 임계점</strong>에 도달해 있어, 차기 회차에서 강력한 이월 또는 출현 후보로 급부상할 확률이 높습니다.`;
+            
+            // 3. 전략적 제안
+            document.getElementById('aiRecommendText').innerHTML = 
+                `다음 회차 조합 구성 시, 과출현된 <span class="font-bold text-gray-500">${maxDigit}끝</span>의 비중을 축소(0~1개)하고, ` +
+                `<span class="font-bold text-blue-700">${minDigit}끝</span>과 <span class="font-bold text-blue-700">${coldDigits[1]}끝</span>을 ` +
+                `핵심 고정수나 예상 끝수로 활용하는 역발상 전략을 제안합니다. ` +
+                `또한, 이월수가 다수 발생한 직후 회차이므로, <strong>${freqArr[1].digit}끝</strong>을 보험수로 가져가는 것이 안정적입니다.`;
+        }
+
+        function renderList() {
+            const data = allData.slice(0, currentRange);
+            document.getElementById('displayedCount').textContent = data.length;
+            
+            const missedCounts = {};
+            for (let digit = 0; digit < 10; digit++) {
+                missedCounts[digit] = [];
+                let counter = 0;
+                for (let i = data.length - 1; i >= 0; i--) {
+                    const count = data[i].digitCounts[digit];
+                    if (count > 0) {
+                        missedCounts[digit][i] = 0;
+                        counter = 0;
+                    } else {
+                        counter++;
+                        missedCounts[digit][i] = counter;
+                    }
+                }
+            }
+            
+            const html = data.map((draw, index) => {
+                const prevDraw = allData[index + 1];
+                let prevEndsus = new Set();
+                
+                if (prevDraw) {
+                    prevDraw.numbers.forEach(n => prevEndsus.add(n % 10));
+                }
+
+                let carryoverCount = 0; // 이월된 끝수 개수
+
+                const numberCells = draw.numbers.map(n => {
+                    const currentEndsu = n % 10;
+                    let numberHtml = '';
+
+                    // 이월된 끝수(직전 회차에 같은 끝수가 있었음)라면 끝수(1단위)만 빨간색
+                    if (prevDraw && prevEndsus.has(currentEndsu)) {
+                        carryoverCount++; 
+                        
+                        if (n < 10) {
+                            // 한 자리 수인 경우 전체가 빨간색
+                            numberHtml = `<span class="text-red-600">${n}</span>`;
+                        } else {
+                            // 두 자리 수인 경우 앞자리는 검정, 뒷자리는 빨강
+                            const tens = Math.floor(n / 10);
+                            const unit = n % 10;
+                            numberHtml = `<span class="text-gray-800">${tens}</span><span class="text-red-600">${unit}</span>`;
+                        }
+                    } else {
+                        // 이월 아님: 전체 검정
+                        numberHtml = `<span class="text-gray-800">${n}</span>`;
+                    }
+
+                    return `<td class="cell-colored border-r border-gray-100">
+                                <div class="cell-content bg-white font-bold text-lg">
+                                    ${numberHtml}
+                                </div>
+                            </td>`;
+                }).join('');
+                
+                // 이월끝수 셀 생성
+                const carryoverCell = `<td class="py-2 px-2 font-bold text-gray-800 border-r border-gray-200 bg-white">${carryoverCount}</td>`;
+
+                const digitCells = [0,1,2,3,4,5,6,7,8,9].map(digit => {
+                    const count = draw.digitCounts[digit];
+                    let cellClass = "py-2 px-2 text-sm font-bold border-r border-gray-100 ";
+                    let content = "";
+
+                    if (count === 1) {
+                        cellClass += "bg-gray-600 text-white";
+                        content = count;
+                    } else if (count === 2) {
+                        cellClass += "bg-dark-navy text-white";
+                        content = count;
+                    } else if (count >= 3) {
+                        cellClass += "bg-dark-red text-white";
+                        content = count;
+                    } else {
+                        const missedCount = missedCounts[digit][index];
+                        content = missedCount > 0 ? `<span class="text-[10px] text-gray-400 font-normal">${missedCount}</span>` : '';
+                    }
+                    
+                    return `<td class="${cellClass}">${content}</td>`;
+                }).join('');
+                
+                return `
+                    <tr class="hover:bg-blue-50 transition-colors">
+                        <td class="py-2 px-2 font-bold text-gray-900 bg-gray-50/50 border-r border-gray-200">${draw.round}</td>
+                        ${numberCells}
+                        ${carryoverCell}
+                        ${digitCells}
+                    </tr>
+                `;
+            }).join('');
+            
+            document.getElementById('drawsList').innerHTML = html;
+        }
+
+        function updateRange(value) {
+            currentRange = parseInt(value);
+            document.getElementById('rangeDisplay').textContent = value + '회';
+            
+            const percent = ((value - 1) / (1203 - 1)) * 100;
+            document.getElementById('rangeProgress').style.width = percent + '%';
+            
+            updatePresetButtons(value);
+            updateStats();
+            renderList();
+        }
+
+        function updatePresetButtons(value) {
+            const buttons = {
+                50: document.getElementById('preset50'),
+                100: document.getElementById('preset100'),
+                500: document.getElementById('preset500'),
+                1203: document.getElementById('presetAll')
+            };
+            Object.keys(buttons).forEach(key => {
+                if (parseInt(key) === parseInt(value)) {
+                    buttons[key].className = 'px-4 py-2 text-sm font-medium bg-green-500 text-white rounded-lg';
+                } else {
+                    buttons[key].className = 'px-4 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors';
+                }
+            });
+        }
+
+        function setRange(value) {
+            document.getElementById('rangeSlider').value = value;
+            updateRange(value);
+        }
+
+        function updateDigitFilter(digit) {
+            const min = parseInt(document.getElementById(`filter${digit}Min`).value);
+            const max = parseInt(document.getElementById(`filter${digit}Max`).value);
+            if (min > max) {
+                document.getElementById(`filter${digit}Max`).value = min;
+                digitFilters[digit].max = min;
+            } else {
+                digitFilters[digit].min = min;
+                digitFilters[digit].max = max;
+            }
+            saveFilterSettings();
+        }
+
+        function resetFilters() {
+            digitFilters = {
+                0: {min: 0, max: 4}, 1: {min: 0, max: 5}, 2: {min: 0, max: 5},
+                3: {min: 0, max: 5}, 4: {min: 0, max: 5}, 5: {min: 0, max: 5},
+                6: {min: 0, max: 4}, 7: {min: 0, max: 4}, 8: {min: 0, max: 4}, 9: {min: 0, max: 4}
+            };
+            
+            for (let i = 0; i < 10; i++) {
+                document.getElementById(`filter${i}Min`).value = digitFilters[i].min;
+                document.getElementById(`filter${i}Max`).value = digitFilters[i].max;
+            }
+            saveFilterSettings();
+        }
+
+        function saveFilterSettings() {
+            const filterEnabled = document.getElementById('filterEnabled').checked;
+            const settings = {
+                enabled: filterEnabled,
+                filters: digitFilters
+            };
+            localStorage.setItem('lottoDigitFilters', JSON.stringify(settings));
+        }
+
+        function loadFilterSettings() {
+            const saved = localStorage.getItem('lottoDigitFilters');
+            if (saved) {
+                try {
+                    const settings = JSON.parse(saved);
+                    document.getElementById('filterEnabled').checked = settings.enabled;
+                    digitFilters = settings.filters;
+                    
+                    for (let i = 0; i < 10; i++) {
+                        document.getElementById(`filter${i}Min`).value = digitFilters[i].min;
+                        document.getElementById(`filter${i}Max`).value = digitFilters[i].max;
+                    }
+                } catch (e) {
+                    console.error('Failed to load filter settings:', e);
+                }
+            }
+        }
+
+        function goToFilterPage() {
+            saveFilterSettings();
+            alert('필터 페이지로 이동합니다. 설정한 필터가 자동으로 적용됩니다.');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('filterEnabled').addEventListener('change', function() {
+                saveFilterSettings();
+            });
+            
+            initData();
+            updateStats();
+            renderList();
+        });
+    </script>
+</body>
+</html>

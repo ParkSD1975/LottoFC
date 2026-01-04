@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html class="light" lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Lotto Lab - 번호별 출현 통계</title>
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "active-green": "#E6FFED",
+                        "active-text": "#16A34A",
+                        "primary-blue": "#4F6AFF",
+                    },
+                    fontFamily: {
+                        "sans": ["Pretendard", "Inter", "system-ui", "sans-serif"],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'glow-blue': '0 4px 14px 0 rgba(6, 182, 212, 0.3)',
+                        'glow-red': '0 4px 14px 0 rgba(244, 63, 94, 0.35)',
+                    }
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined.filled { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Table Styling */
+        .stats-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11px; }
+        .stats-table th { 
+            background: #ffffff; 
+            padding: 12px 4px; 
+            text-align: center; 
+            border-bottom: 2px solid #f1f5f9; 
+            font-weight: 700; 
+            color: #475569;
+            position: sticky; 
+            top: 0; 
+            z-index: 20; 
+            font-size: 11px;
+        }
+        .stats-table td { 
+            padding: 6px 2px; 
+            text-align: center; 
+            border-bottom: 1px solid #f8fafc; 
+            background: white; 
+            font-size: 10px; 
+            height: 34px;
+            vertical-align: middle;
+            transition: background 0.1s;
+        }
+        .stats-table tr:hover td { background: #f8fafc; }
+        
+        .stats-table .round-col { 
+            position: sticky; 
+            left: 0; 
+            background: #ffffff; 
+            z-index: 15; 
+            font-weight: 600; 
+            color: #64748b;
+            min-width: 70px; 
+            border-right: 1px solid #f1f5f9;
+        }
+        .stats-table tr:hover .round-col { background: #f8fafc; }
+        .stats-table th.round-col { z-index: 30; border-bottom: 2px solid #f1f5f9; }
+
+        /* --- NEW COLOR PALETTE --- */
+
+        /* Marker Base */
+        .marker {
+            width: 22px; 
+            height: 22px; 
+            border-radius: 6px; 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: 700;
+            font-size: 10px;
+            transition: all 0.2s ease;
+            border-radius: 50%; 
+        }
+        
+        /* Hit: Emerald Blue (Teal to Sky) */
+        .marker-hit { 
+            background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%); 
+            color: white; 
+            box-shadow: 0 3px 8px rgba(14, 165, 233, 0.3);
+        }
+        
+        /* Carry: Brightening Red (Rose to Orange) */
+        .marker-carry { 
+            background: linear-gradient(135deg, #f43f5e 0%, #f97316 100%); 
+            color: white;
+            box-shadow: 0 3px 8px rgba(244, 63, 94, 0.4);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .cell-miss { 
+            color: #cbd5e1; 
+            font-weight: 500;
+        }
+        .miss-high { color: #f43f5e; font-weight: 700; } 
+
+        .number-header { 
+            color: #64748b; 
+            min-width: 34px; 
+            font-size: 11px; 
+        }
+        
+        .count-row td { 
+            background: #fffbeb !important; 
+            border-top: 2px solid #fcd34d;
+            border-bottom: 2px solid #fcd34d;
+            font-weight: 700; 
+            color: #b45309; 
+            padding: 10px 0;
+        }
+        .count-row .round-col { 
+            background: #fffbeb !important; 
+            color: #b45309;
+            border-top: 2px solid #fcd34d;
+            border-bottom: 2px solid #fcd34d;
+        }
+
+        /* Chart Styling */
+        .chart-container { display: grid; grid-template-columns: repeat(45, 1fr); gap: 6px; align-items: end; padding: 0 4px; }
+        .chart-bar-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; group: hover; }
+        
+        .bar-fill { 
+            width: 100%; 
+            border-radius: 6px 6px 0 0; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        .chart-bar-wrapper:hover .bar-fill { 
+            filter: brightness(1.1) contrast(1.1);
+            transform: scaleY(1.05); 
+        }
+        
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #0ea5e9; /* Matching Emerald Blue theme */
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 2px 6px rgba(14, 165, 233, 0.4);
+            border: 2px solid white;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 3px;
+        }
+        
+        .ai-section { 
+            background: white;
+            border: 1px solid #e9d5ff;
+            background-image: radial-gradient(circle at 10% 10%, #faf5ff 0%, #ffffff 50%);
+        }
+    </style>
+</head>
+<body class="bg-[#F3F4F6] font-sans antialiased text-gray-800">
+    <div class="flex flex-col h-screen w-full">
+        <!-- Header -->
+        <header class="bg-white border-b border-gray-200 h-16 flex items-center px-6 flex-shrink-0 justify-between z-40 relative shadow-sm">
+            <div class="flex items-center gap-2">
+                <div class="bg-green-100 p-1.5 rounded-lg"><span class="material-symbols-outlined text-green-500 text-2xl filled">casino</span></div>
+                <span class="text-lg font-bold tracking-tight text-gray-900">Lotto Lab</span>
+            </div>
+            <nav class="flex items-center gap-1">
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900">대시보드</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900">당첨번호</a>
+                <a href="#" class="px-3 py-2 text-sm font-bold text-gray-900 border-b-2 border-gray-900">기초분석</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900">커스텀분석</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900">AI분석</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900">필터</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900">조합</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900">AI 조합</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900">출력</a>
+                <a href="#" class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900">검증</a>
+            </nav>
+            <button class="flex items-center gap-1.5 bg-green-500 hover:bg-green-600 transition-colors text-white px-4 py-2 rounded-md text-sm font-bold shadow-md shadow-green-200"><span class="material-symbols-outlined text-lg">add</span>새 분석</button>
+        </header>
+        
+        <div class="flex flex-1 overflow-hidden">
+            <!-- Sidebar -->
+            <aside class="w-56 bg-white border-r border-gray-200 overflow-y-auto custom-scrollbar flex-shrink-0">
+                <div class="p-4">
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase mb-3 px-2">기초분석</h3>
+                    <nav class="space-y-1">
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">calculate</span>총합</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">dialpad</span>끝수합</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">format_list_numbered</span>끝수</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">auto_graph</span>AC값</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">pie_chart</span>홀짝 비율</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">trending_up</span>저고 비율</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">functions</span>소수</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">science</span>합성수</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">square</span>제곱수</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">content_copy</span>동형수</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">grid_on</span>배수</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">line_axis</span>연번</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">history</span>이월수</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm font-semibold bg-active-green text-active-text rounded-lg"><span class="material-symbols-outlined text-lg filled">bar_chart</span>번호별 출현 통계</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">local_fire_department</span>핫콜드</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">visibility_off</span>미출현 그룹</a>
+                        <a href="#" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50"><span class="material-symbols-outlined text-lg">insights</span>회귀분석</a>
+                    </nav>
+                </div>
+            </aside>
+            
+            <main class="flex-1 overflow-hidden p-8">
+                <div class="h-full flex flex-col space-y-5 max-w-[1600px] mx-auto">
+                    <!-- Title Section -->
+                    <div class="flex items-end justify-between">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900 mb-1">번호별 출현 통계</h1>
+                            <p class="text-sm text-gray-500">각 회차별 당첨/낙첨 현황을 시각적으로 분석합니다.</p>
+                        </div>
+                    </div>
+
+                    <!-- AI 분석 -->
+                    <div class="ai-section rounded-2xl p-6 shadow-soft">
+                        <div class="flex items-center gap-2 mb-5">
+                            <div class="p-2 bg-purple-100 rounded-lg text-purple-600">
+                                <span class="material-symbols-outlined text-2xl filled">psychology</span>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-900">AI 심층 분석</h3>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span class="material-symbols-outlined text-blue-500">insights</span>
+                                    <h4 class="font-bold text-gray-800 text-sm">패턴 인사이트</h4>
+                                </div>
+                                <p class="text-xs text-gray-600 leading-relaxed" id="aiPatternText">분석 중...</p>
+                            </div>
+                            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span class="material-symbols-outlined text-green-500">trending_up</span>
+                                    <h4 class="font-bold text-gray-800 text-sm">출현 추세</h4>
+                                </div>
+                                <p class="text-xs text-gray-600 leading-relaxed" id="aiTrendText">분석 중...</p>
+                            </div>
+                            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <span class="material-symbols-outlined text-purple-500">lightbulb</span>
+                                    <h4 class="font-bold text-gray-800 text-sm">전략 제안</h4>
+                                </div>
+                                <p class="text-xs text-gray-600 leading-relaxed" id="aiStrategyText">분석 중...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 막대그래프 -->
+                    <div class="bg-white rounded-2xl p-6 shadow-soft border border-gray-100">
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-gray-400">bar_chart</span>
+                                <h3 class="text-sm font-bold text-gray-700">번호별 당첨율 분포</h3>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-gradient-to-br from-[#f43f5e] to-[#f97316] shadow-sm"></div>
+                                    <span class="text-xs text-gray-500 font-medium">평균 초과</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-gradient-to-br from-[#0ea5e9] to-[#10b981] shadow-sm"></div>
+                                    <span class="text-xs text-gray-500 font-medium">평균 이하</span>
+                                </div>
+                                <span class="text-xs font-medium px-2 py-1 bg-gray-100 text-gray-600 rounded text-center ml-2">선택된 범위 통계</span>
+                            </div>
+                        </div>
+                        <div id="chart" class="chart-container w-full" style="height: 180px;"></div>
+                        <!-- X Axis Labels -->
+                        <div class="grid grid-cols-45 gap-1 mt-2 px-[4px]">
+                            <!-- JS will populate visually aligned numbers here if needed, or simplified -->
+                        </div>
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="bg-white rounded-2xl p-5 shadow-soft border border-gray-100 flex flex-col justify-center">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-bold text-gray-700">분석 범위 설정</h3>
+                                <span class="text-sm font-bold text-white bg-[#0ea5e9] px-3 py-1 rounded-full shadow-md shadow-blue-100" id="rangeLabel">최근 73회차</span>
+                            </div>
+                            <div class="relative px-1 mb-4">
+                                <input type="range" id="rangeSlider" min="10" max="1203" value="73" step="1" class="w-full h-2 rounded-lg appearance-none cursor-pointer accent-primary-blue" oninput="updateRange(this.value)">
+                            </div>
+                            <div class="flex gap-1.5 flex-wrap justify-center">
+                                <button onclick="setRange(10)" class="range-btn px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200 transition-all" id="btn10">10회</button>
+                                <button onclick="setRange(30)" class="range-btn px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200 transition-all" id="btn30">30회</button>
+                                <button onclick="setRange(50)" class="range-btn px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200 transition-all" id="btn50">50회</button>
+                                <button onclick="setRange(100)" class="range-btn px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200 transition-all" id="btn100">100회</button>
+                                <button onclick="setRange(1203)" class="range-btn px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200 transition-all" id="btn1203">전체</button>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl p-5 shadow-soft border border-gray-100 flex flex-col justify-between">
+                             <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-sm font-bold text-gray-700">범례 및 정렬</h3>
+                            </div>
+                            <div class="flex items-center gap-4 mb-4">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-4 h-4 rounded-full bg-gradient-to-br from-[#0ea5e9] to-[#10b981] shadow-glow-blue"></div>
+                                    <span class="text-xs text-gray-600 font-medium">당첨 (Emerald Blue)</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-4 h-4 rounded-full bg-gradient-to-br from-[#f43f5e] to-[#f97316] shadow-glow-red border border-white"></div>
+                                    <span class="text-xs text-gray-600 font-medium">연속당첨 (Bright Red)</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-gray-400 font-medium">숫자</span>
+                                    <span class="text-xs text-gray-600 font-medium">미당첨 기간</span>
+                                </div>
+                            </div>
+                            <button onclick="toggleSort()" class="w-full py-2.5 text-xs font-bold rounded-xl bg-gray-900 text-white hover:bg-gray-800 flex items-center justify-center gap-2 transition-all shadow-lg shadow-gray-200">
+                                <span class="material-symbols-outlined text-sm">swap_vert</span>
+                                <span id="sortButtonText">미당첨 짧은 순 정렬 중</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Table -->
+                    <div class="flex-1 bg-white rounded-2xl border border-gray-200 shadow-soft overflow-hidden flex flex-col">
+                        <div class="overflow-auto custom-scrollbar flex-1 relative">
+                            <table class="stats-table" id="statsTable">
+                                <thead><tr><th class="round-col shadow-sm">회차</th></tr></thead>
+                                <tbody id="tableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script>
+        let currentRange=73,sortByMissCount=true;
+        const rawData=`1203,3,6,18,29,35,39,24\n1202,5,12,21,33,37,40,7\n1201,7,9,24,27,35,36,37\n1200,1,2,4,16,20,32,45\n1199,16,24,25,30,31,32,7\n1198,26,30,33,38,39,41,21\n1197,1,5,7,26,28,43,30\n1196,8,12,15,29,40,45,14\n1195,3,15,27,33,34,36,37\n1194,3,13,15,24,33,37,2\n1193,6,9,16,19,24,28,17\n1192,10,16,23,36,39,40,11\n1191,1,4,11,12,20,41,2\n1190,7,9,19,23,26,45,33\n1189,9,19,29,35,37,38,31\n1188,3,4,12,19,22,27,9\n1187,5,13,26,29,37,40,42\n1186,2,8,13,16,23,28,35\n1185,6,17,22,28,29,32,38\n1184,14,16,23,25,31,37,42\n1183,4,15,17,23,27,36,31\n1182,1,13,21,25,28,31,22\n1181,8,10,14,20,33,41,28\n1180,6,12,18,37,40,41,3\n1179,3,16,18,24,40,44,21\n1178,5,6,11,27,43,44,17\n1177,3,7,15,16,19,43,21\n1176,7,9,11,21,30,35,29\n1175,3,4,6,8,32,42,31\n1174,8,11,14,17,36,39,22\n1173,1,5,18,20,30,35,3\n1172,7,9,24,40,42,44,45\n1171,3,6,7,11,12,17,19\n1170,3,13,28,34,38,42,25\n1169,5,12,24,26,39,42,20\n1168,9,21,24,30,33,37,29\n1167,8,23,31,35,39,40,24\n1166,14,23,25,27,29,42,16\n1165,6,7,27,29,38,45,17\n1164,17,18,23,25,38,39,22\n1163,2,13,15,16,33,43,4\n1162,20,21,22,25,28,29,6\n1161,2,12,20,24,34,42,37\n1160,7,13,18,36,39,45,19\n1159,3,9,27,28,38,39,7\n1158,21,25,27,32,37,38,20\n1157,5,7,12,20,25,26,28\n1156,30,31,34,39,41,45,7\n1155,10,16,19,27,37,38,13\n1154,4,8,22,26,32,38,27\n1153,1,9,10,13,35,44,5\n1152,30,31,32,35,36,37,5\n1151,2,3,9,15,27,29,8\n1150,8,9,18,35,39,45,25\n1149,8,15,19,21,32,36,38\n1148,3,6,13,15,16,22,32\n1147,7,11,24,26,27,37,32\n1146,6,11,17,19,40,43,28\n1145,2,11,31,33,37,44,32\n1144,3,4,12,15,26,34,6\n1143,10,16,17,27,28,36,6\n1142,2,8,28,30,37,41,22\n1141,7,11,12,21,26,35,20\n1140,7,10,22,29,31,38,15\n1139,5,12,15,30,37,40,18\n1138,14,16,19,20,29,34,35\n1137,4,9,12,15,33,45,26\n1136,21,33,35,38,42,44,1\n1135,1,6,13,19,21,33,4\n1134,3,7,9,13,19,24,23\n1133,13,14,20,28,29,34,23\n1132,6,7,19,28,34,41,5\n1131,1,2,6,14,27,38,33\n1130,15,19,21,25,27,28,40\n1129,5,10,11,17,28,34,22\n1128,1,5,8,16,28,33,45\n1127,10,15,24,30,31,37,32\n1126,4,5,9,11,37,40,7\n1125,6,14,25,33,40,44,30\n1124,3,8,17,30,33,34,28\n1123,13,19,21,24,34,35,26\n1122,3,6,21,30,34,35,22\n1121,6,24,31,32,38,44,8\n1120,2,19,26,31,38,41,34\n1119,1,9,12,13,20,45,3\n1118,11,13,14,15,16,45,3\n1117,3,4,9,30,33,36,7\n1116,15,16,17,25,30,31,32\n1115,7,12,23,32,34,36,8\n1114,10,16,19,32,33,38,3\n1113,11,13,20,21,32,44,8\n1112,16,20,26,36,42,44,24\n1111,3,13,30,33,43,45,4\n1110,3,7,11,20,22,41,24\n1109,10,12,13,19,33,40,2\n1108,7,19,26,37,39,44,27\n1107,6,14,30,31,40,41,29\n1106,1,3,4,29,42,45,36\n1105,6,16,34,37,39,40,11\n1104,1,7,21,30,35,38,2\n1103,10,12,29,31,40,44,2\n1102,13,14,22,26,37,38,20\n1101,6,7,13,28,36,42,41\n1100,17,26,29,30,31,43,12\n1099,3,20,28,38,40,43,4\n1098,12,16,21,24,41,43,15\n1097,14,33,34,35,37,40,4\n1096,1,12,16,19,23,43,34\n1095,8,14,28,29,34,40,12\n1094,6,7,15,22,26,40,41\n1093,10,17,22,30,35,43,44\n1092,7,18,19,26,33,45,37\n1091,6,20,23,24,28,30,44\n1090,12,19,21,29,40,45,1\n1089,4,18,31,37,42,43,40\n1088,11,21,22,30,39,44,31\n1087,13,14,18,21,34,44,16\n1086,11,16,25,27,35,36,37\n1085,4,7,17,18,38,44,36\n1084,8,12,13,29,33,42,5\n1083,3,7,14,15,22,38,17\n1082,21,26,27,32,34,42,31\n1081,1,9,16,23,24,38,17\n1080,13,16,23,31,36,44,38\n1079,4,8,18,24,37,45,6\n1078,6,10,11,14,36,38,43\n1077,4,8,17,30,40,43,34\n1076,3,7,9,33,36,37,10\n1075,1,23,24,35,44,45,10\n1074,1,6,20,27,28,41,15\n1073,6,18,28,30,32,38,15\n1072,16,18,20,23,32,43,27\n1071,1,2,11,21,30,35,39\n1070,3,6,14,22,30,41,36\n1069,1,10,18,22,28,31,44\n1068,4,7,19,26,33,35,3\n1067,7,10,19,23,28,33,18\n1066,6,11,16,19,21,32,45\n1065,3,18,19,23,32,45,24\n1064,3,6,9,18,22,35,14\n1063,3,6,22,23,24,38,30\n1062,20,31,32,40,41,45,12\n1061,4,24,27,35,37,45,15\n1060,3,10,24,33,38,45,36\n1059,7,10,22,25,34,40,27\n1058,11,23,25,30,32,40,42\n1057,8,13,19,27,40,45,12\n1056,13,20,24,32,36,45,29\n1055,4,7,12,14,22,33,31\n1054,14,19,27,28,30,45,33\n1053,22,26,29,30,34,45,15\n1052,5,17,26,27,35,38,1\n1051,21,26,30,32,33,35,44\n1050,6,12,31,35,38,43,17\n1049,3,5,13,20,21,37,17\n1048,6,12,17,21,32,39,30\n1047,2,20,33,40,42,44,32\n1046,7,16,25,29,35,36,28\n1045,6,14,15,19,21,41,37\n1044,12,17,20,26,28,36,4\n1043,3,5,12,22,26,31,19\n1042,5,14,15,23,34,43,4\n1041,6,7,9,11,17,18,45\n1040,8,16,26,29,31,36,11\n1039,2,3,6,19,36,39,26\n1038,7,16,24,27,37,44,2\n1037,2,14,15,22,27,33,31\n1036,2,5,22,32,34,45,39\n1035,9,14,34,35,41,42,2\n1034,26,31,32,33,38,40,11\n1033,3,11,15,20,35,44,10\n1032,1,6,12,19,36,42,28\n1031,6,7,22,32,35,36,19\n1030,2,5,11,17,24,29,9\n1029,12,30,32,37,39,41,24\n1028,5,7,12,13,18,35,23\n1027,14,16,27,35,39,45,5\n1026,5,12,13,31,32,41,34\n1025,8,9,20,25,29,33,7\n1024,9,18,20,22,38,44,10\n1023,10,14,16,18,29,35,25\n1022,5,6,11,29,42,45,28\n1021,12,15,17,24,29,45,16\n1020,12,27,29,38,41,45,6\n1019,1,4,13,17,34,39,6\n1018,3,19,21,25,37,45,35\n1017,12,18,22,23,30,34,32\n1016,15,26,28,34,41,42,44\n1015,14,23,31,33,37,40,44\n1014,3,11,14,18,26,27,21\n1013,21,22,26,34,36,41,32\n1012,5,11,18,20,35,45,3\n1011,1,9,12,26,35,38,42\n1010,9,12,15,25,34,36,3\n1009,15,23,29,34,40,44,20\n1008,9,11,30,31,41,44,33\n1007,8,11,16,19,21,25,40\n1006,8,11,15,16,17,37,36\n1005,8,13,18,24,27,29,17\n1004,7,15,30,37,39,44,18\n1003,1,4,29,39,43,45,31\n1002,17,25,33,35,38,45,15\n1001,6,10,12,14,20,42,15\n1000,2,8,19,22,32,42,39\n999,1,3,9,14,18,28,34\n998,13,17,18,20,42,45,41\n997,4,7,14,16,24,44,20\n996,6,11,15,24,32,39,28\n995,1,4,13,29,38,39,7\n994,1,3,8,24,27,35,28\n993,6,14,16,18,24,42,44\n992,12,20,26,33,44,45,24\n991,13,18,25,31,33,44,38\n990,2,4,25,26,36,37,28\n989,17,18,21,27,29,33,26\n988,2,13,20,30,31,41,27\n987,2,4,15,23,29,38,7\n986,7,10,16,28,41,42,40\n985,17,21,23,30,34,44,19\n984,3,10,23,35,36,37,18\n983,13,23,26,31,35,43,15\n982,5,7,13,20,21,44,33\n981,27,36,37,41,43,45,32\n980,3,13,16,23,24,35,14\n979,7,11,16,21,27,33,24\n978,1,7,15,32,34,42,8\n977,2,9,10,14,22,44,16\n976,4,12,14,25,35,37,2\n975,7,8,9,17,22,24,5\n974,1,2,11,16,39,44,32\n973,22,26,31,37,41,42,24\n972,3,6,17,23,37,39,26\n971,2,6,17,18,21,26,7\n970,9,11,16,21,28,36,5\n969,3,9,10,29,40,45,7\n968,2,5,12,14,24,39,33\n967,1,6,13,37,38,40,9\n966,1,21,25,29,34,37,36\n965,2,13,25,28,29,36,34\n964,6,21,36,38,39,43,30\n963,6,12,19,23,34,42,35\n962,1,18,28,31,34,43,40\n961,11,20,29,31,33,42,43\n960,2,18,24,30,32,45,14\n959,1,14,15,24,40,41,35\n958,2,9,10,16,35,37,1\n957,4,15,24,35,36,40,1\n956,10,11,20,21,25,41,40\n955,4,9,23,26,29,33,8\n954,1,9,26,28,30,41,32\n953,7,9,22,27,37,42,34\n952,4,12,22,24,33,41,38\n951,2,12,30,31,39,43,38\n950,3,4,15,22,28,40,10\n949,14,21,35,36,40,44,30\n948,13,18,30,31,38,41,5\n947,3,8,17,20,27,35,26\n946,9,18,19,30,34,40,20\n945,9,10,15,30,33,37,26\n944,2,13,16,19,32,33,42\n943,1,8,13,36,44,45,39\n942,10,12,18,35,42,43,39\n941,12,14,25,27,39,40,35\n940,3,15,20,22,24,41,11\n939,4,11,28,39,42,45,6\n938,4,8,10,16,31,36,9\n937,2,10,13,22,29,40,26\n936,7,11,13,17,18,29,43\n935,4,10,20,32,38,44,18\n934,1,3,30,33,36,39,12\n933,23,27,29,31,36,45,37\n932,1,6,15,36,37,38,5\n931,14,15,23,25,35,43,32\n930,8,21,25,38,39,44,28\n929,7,9,12,15,19,23,4\n928,3,4,10,20,28,44,30\n927,4,15,22,38,41,43,26\n926,10,16,18,20,25,31,6\n925,13,24,32,34,39,42,4\n924,3,11,34,42,43,44,13\n923,3,17,18,23,36,41,26\n922,2,6,13,17,27,43,36\n921,5,7,12,22,28,41,1\n920,2,3,26,33,34,43,29\n919,9,14,17,18,42,44,35\n918,7,11,12,31,33,38,5\n917,1,3,23,24,27,43,34\n916,6,21,22,32,35,36,17\n915,2,6,11,13,22,37,14\n914,16,19,24,33,42,44,27\n913,6,14,16,21,27,37,40\n912,5,8,18,21,22,38,10\n911,4,5,12,14,32,42,35\n910,1,11,17,27,35,39,31\n909,7,24,29,30,34,35,33\n908,3,16,21,22,23,44,30\n907,21,27,29,38,40,44,37\n906,2,5,14,28,31,32,20\n905,3,4,16,27,38,40,20\n904,2,6,8,26,43,45,11\n903,2,15,16,21,22,28,45\n902,7,19,23,24,36,39,30\n901,5,18,20,23,30,34,21\n900,7,13,16,18,35,38,14\n899,8,19,20,21,33,39,37\n898,18,21,28,35,37,42,17\n897,6,7,12,22,26,36,29\n896,5,12,25,26,38,45,23\n895,16,26,31,38,39,41,23\n894,19,32,37,40,41,43,45\n893,1,15,17,23,25,41,10\n892,4,9,17,18,26,42,36\n891,9,13,28,31,39,41,19\n890,1,4,14,18,29,37,6\n889,3,13,29,38,39,42,26\n888,3,7,12,31,34,38,32\n887,8,14,17,27,36,45,10\n886,19,23,28,37,42,45,2\n885,1,3,24,27,39,45,31\n884,4,14,23,28,37,45,17\n883,9,18,32,33,37,44,22\n882,18,34,39,43,44,45,23\n881,4,18,20,26,27,32,9\n880,7,17,19,23,24,45,38\n879,1,4,10,14,15,35,20\n878,2,6,11,16,25,31,3\n877,5,17,18,22,23,43,12\n876,5,16,21,26,34,42,24\n875,19,22,30,34,39,44,36\n874,1,15,19,23,28,42,32\n873,3,5,12,13,33,39,38\n872,2,4,30,32,33,43,29\n871,2,6,12,26,30,34,38\n870,21,25,30,32,40,42,31\n869,2,6,20,27,37,39,4\n868,12,17,28,41,43,44,25\n867,14,17,19,22,24,40,41\n866,9,15,29,34,37,39,12\n865,3,15,22,32,33,45,2\n864,3,7,10,13,25,36,32\n863,16,21,28,35,39,43,12\n862,10,34,38,40,42,43,32\n861,11,17,19,21,22,25,24\n860,4,8,18,25,27,32,42\n859,8,22,35,38,39,41,24\n858,9,13,32,38,39,43,23\n857,6,10,16,28,34,38,43\n856,10,24,40,41,43,44,17\n855,8,15,17,19,43,44,7\n854,20,25,31,32,36,43,3\n853,2,8,23,26,27,44,13\n852,11,17,28,30,33,35,9\n851,14,18,22,26,31,44,40\n850,16,20,24,28,36,39,5\n849,5,13,17,29,34,39,3\n848,1,2,16,22,38,39,34\n847,12,16,26,28,30,42,22\n846,5,18,30,41,43,45,13\n845,1,16,29,33,40,45,6\n844,7,8,13,15,33,45,18\n843,19,21,30,33,34,42,4\n842,14,26,32,36,39,42,38\n841,5,11,14,30,33,38,24\n840,2,4,11,28,29,43,27\n839,3,9,11,12,13,19,35\n838,9,14,17,33,36,38,20\n837,2,25,28,30,33,45,6\n836,1,9,11,14,26,28,19\n835,9,10,13,28,38,45,35\n834,6,8,18,35,42,43,3\n833,12,18,30,39,41,42,19\n832,13,14,19,26,40,43,30\n831,3,10,16,19,31,39,9\n830,5,6,16,18,37,38,17\n829,4,5,31,35,43,45,29\n828,4,7,13,29,31,39,18\n827,5,11,12,29,33,44,14\n826,13,16,24,25,33,36,42\n825,8,15,21,31,33,38,42\n824,7,9,24,29,34,38,26\n823,12,18,24,26,39,40,15\n822,9,18,20,24,27,36,12\n821,1,12,13,24,29,44,16\n820,10,21,22,30,35,42,6\n819,16,25,33,38,40,45,15\n818,14,15,25,28,29,30,3\n817,3,9,12,13,25,43,34\n816,12,18,19,29,31,39,7\n815,17,21,25,26,27,36,4\n814,2,21,28,38,42,45,30\n813,11,30,34,35,42,44,27\n812,1,3,12,14,16,43,10\n811,8,11,19,21,36,45,25\n810,5,10,13,21,39,43,11\n809,6,11,15,17,23,40,39\n808,15,21,31,32,41,43,24\n807,6,10,18,25,34,35,33\n806,14,20,23,31,37,38,27\n805,3,12,13,18,31,32,42\n804,1,10,13,26,32,36,9\n803,5,9,14,26,30,43,2\n802,10,11,12,18,24,42,27\n801,17,25,28,37,43,44,2\n800,1,4,10,12,28,45,26\n799,12,17,23,34,42,45,33\n798,2,10,14,22,32,36,41\n797,5,22,31,32,39,45,36\n796,1,21,26,36,40,41,5\n795,3,10,13,26,34,38,36\n794,6,7,18,19,30,38,13\n793,10,15,21,35,38,43,31\n792,2,7,19,25,29,36,16\n791,2,10,12,31,33,42,32\n790,3,8,19,27,30,41,12\n789,2,6,7,12,19,45,38\n788,2,10,11,19,35,39,29\n787,5,6,13,16,27,28,9\n786,12,15,16,20,24,30,38\n785,4,6,15,25,26,33,40\n784,3,10,23,24,31,39,22\n783,14,15,16,17,38,45,36\n782,6,18,31,34,38,45,20\n781,11,16,18,19,24,39,43\n780,15,17,19,21,27,45,16\n779,6,12,19,24,34,41,4\n778,6,21,35,36,37,41,11\n777,6,12,17,21,34,37,18\n776,8,9,18,21,28,40,20\n775,11,12,29,33,38,42,17\n774,12,15,18,28,34,42,9\n773,8,12,19,21,31,35,44\n772,5,6,11,14,21,41,32\n771,6,10,17,18,21,29,30\n770,1,9,12,23,39,43,34\n769,5,7,11,16,41,45,4\n768,7,27,29,30,38,44,4\n767,5,15,20,31,34,42,22\n766,9,30,34,35,39,41,21\n765,1,3,8,12,42,43,33\n764,7,22,24,31,34,36,15\n763,3,8,16,32,34,43,10\n762,1,3,12,21,26,41,16\n761,4,7,11,24,42,45,30\n760,10,22,27,31,42,43,12\n759,9,33,36,40,42,43,32\n758,5,9,12,30,39,43,24\n757,6,7,11,17,33,44,1\n756,10,14,16,18,27,28,4\n755,13,14,26,28,30,36,37\n754,2,8,17,24,29,31,32\n753,2,17,19,24,37,41,3\n752,4,16,20,33,40,43,7\n751,3,4,16,20,28,44,17\n750,1,2,15,19,24,36,12\n749,12,14,24,26,34,45,41\n748,3,10,13,22,31,32,29\n747,7,9,12,14,23,28,17\n746,3,12,33,36,42,45,25\n745,1,2,3,9,12,23,10\n744,10,15,18,21,34,41,43\n743,15,19,21,34,41,44,10\n742,8,10,13,36,37,40,6\n741,5,21,27,34,44,45,16\n740,4,8,9,16,17,19,31\n739,7,22,29,33,34,35,30\n738,23,27,28,38,42,43,36\n737,13,15,18,24,27,41,11\n736,2,11,17,18,21,27,6\n735,5,10,13,27,37,41,4\n734,6,16,37,38,41,45,18\n733,11,24,32,33,35,40,13\n732,2,4,5,17,27,32,43\n731,2,7,13,25,42,45,39\n730,4,10,14,15,18,22,39\n729,11,17,21,26,36,45,16\n728,3,6,10,30,34,37,36\n727,7,8,10,19,21,31,20\n726,1,11,21,23,34,44,24\n725,6,7,19,21,41,43,38\n724,2,8,33,35,37,41,14\n723,20,30,33,35,36,44,22\n722,12,14,21,30,39,43,45\n721,1,28,35,41,43,44,31\n720,1,12,29,34,36,37,41\n719,4,8,13,19,20,43,26\n718,4,11,20,23,32,39,40\n717,2,11,19,25,28,32,44\n716,2,6,13,16,29,30,21\n715,2,7,27,33,41,44,10\n714,1,7,22,33,37,40,20\n713,2,5,15,18,19,23,44\n712,17,20,30,31,33,45,19\n711,11,15,24,35,37,45,42\n710,3,4,9,24,25,33,10\n709,10,18,30,36,39,44,32\n708,2,10,16,19,34,45,1\n707,2,12,19,24,39,44,35\n706,3,4,6,10,28,30,37\n705,1,6,17,22,28,45,23\n704,1,4,8,23,33,42,45\n703,10,28,31,33,41,44,21\n702,3,13,16,24,26,29,9\n701,3,10,14,16,36,38,35\n700,11,23,28,29,30,44,13\n699,4,5,8,16,21,29,3\n698,3,11,13,21,33,37,18\n697,2,5,8,11,33,39,31\n696,1,7,16,18,34,38,21\n695,4,18,26,33,34,38,14\n694,7,15,20,25,33,43,12\n693,1,6,11,28,34,42,30\n692,3,11,14,15,32,36,44\n691,15,27,33,35,43,45,16\n690,24,25,33,34,38,39,43\n689,7,17,19,30,36,38,34\n688,5,15,22,23,34,35,2\n687,1,8,10,13,28,42,45\n686,7,12,15,24,25,43,13\n685,6,7,12,28,38,40,18\n684,1,11,15,17,25,39,40\n683,6,13,20,27,28,40,15\n682,17,23,27,35,38,43,2\n681,21,24,27,29,43,44,7\n680,4,10,19,29,32,42,30\n679,3,5,7,14,26,34,35\n678,4,5,6,12,25,37,45\n677,12,15,24,36,41,44,42\n676,1,8,17,34,39,45,27\n675,1,8,11,15,18,45,7\n674,9,10,14,25,27,31,11\n673,7,10,17,29,33,44,5\n672,8,21,28,31,36,45,43\n671,7,9,10,13,31,35,24\n670,11,18,26,27,40,41,25\n669,7,8,20,29,33,38,9\n668,12,14,15,24,27,32,3\n667,15,17,25,37,42,43,13\n666,2,4,6,11,17,28,16\n665,5,6,11,17,38,44,13\n664,10,20,33,36,41,44,5\n663,3,5,8,19,38,42,20\n662,5,6,9,11,15,37,26\n661,2,3,12,20,27,38,40\n660,4,9,23,33,39,44,14\n659,7,18,19,27,29,42,45\n658,8,19,25,28,32,36,37\n657,10,14,19,39,40,43,23\n656,3,7,14,16,31,40,39\n655,7,37,38,39,40,44,18\n654,16,21,26,31,36,43,6\n653,5,6,26,27,38,39,1\n652,3,13,15,40,41,44,20\n651,11,12,16,26,29,44,18\n650,3,4,7,11,31,41,35\n649,3,21,22,33,41,42,20\n648,13,19,28,37,38,43,4\n647,5,16,21,23,24,30,29\n646,2,9,24,41,43,45,30\n645,1,4,16,26,40,41,31\n644,5,13,17,23,28,36,8\n643,15,24,31,32,33,40,13\n642,8,17,18,24,39,45,32\n641,11,18,21,36,37,43,12\n640,14,15,18,21,26,35,23\n639,6,15,22,23,25,32,40\n638,7,18,22,24,31,34,6\n637,3,16,22,37,38,44,23\n636,6,7,15,16,20,31,26\n635,11,13,25,26,29,33,32\n634,4,10,11,12,20,27,38\n633,9,12,19,20,39,41,13\n632,15,18,21,32,35,44,6\n631,1,2,4,23,31,34,8\n630,8,17,21,24,27,31,15\n629,19,28,31,38,43,44,1\n628,1,7,12,15,23,42,11\n627,2,9,22,25,31,45,12\n626,13,14,26,33,40,43,15\n625,3,6,7,20,21,39,13\n624,1,7,19,26,27,35,16\n623,7,13,30,39,41,45,25\n622,9,15,16,21,28,34,24\n621,1,2,6,16,19,42,9\n620,2,16,17,32,39,45,40\n619,6,8,13,30,35,40,21\n618,8,16,25,30,42,43,15\n617,4,5,11,12,24,27,28\n616,5,13,18,23,40,45,3\n615,10,17,18,19,23,27,35\n614,8,21,25,39,40,44,18\n613,7,8,11,16,41,44,35\n612,6,9,18,19,25,33,40\n611,2,22,27,33,36,37,14\n610,14,18,20,23,28,36,33\n609,4,8,27,34,39,40,13\n608,4,8,18,19,39,44,41\n607,8,14,23,36,38,39,13\n606,1,5,6,14,20,39,22\n605,1,2,7,9,10,38,42\n604,2,6,18,21,33,34,30\n603,2,19,25,26,27,43,28\n602,13,14,22,27,30,38,2\n601,2,16,19,31,34,35,37\n600,5,11,14,27,29,36,44\n599,5,12,17,29,34,35,27\n598,4,12,24,33,38,45,22\n597,8,10,23,24,35,43,37\n596,3,4,12,14,25,43,17\n595,8,24,28,35,38,40,5\n594,2,8,13,25,28,37,3\n593,9,10,13,24,33,38,28\n592,2,5,6,13,28,44,43\n591,8,13,14,30,38,39,5\n590,20,30,36,38,41,45,23\n589,6,8,28,33,38,39,22\n588,2,8,15,22,25,41,30\n587,14,21,29,31,32,37,17\n586,2,7,12,15,21,34,5\n585,6,7,10,16,38,41,4\n584,7,18,30,39,40,41,36\n583,8,17,27,33,40,44,24\n582,2,12,14,33,40,41,25\n581,3,5,14,20,42,44,33\n580,5,7,9,11,32,35,33\n579,5,7,20,22,37,42,39\n578,5,12,14,32,34,42,16\n577,16,17,22,31,34,37,33\n576,10,11,15,25,35,41,13\n575,2,8,20,30,33,34,6\n574,14,15,16,19,25,43,2\n573,2,4,20,34,35,43,14\n572,3,13,18,33,37,45,1\n571,11,18,21,26,38,43,29\n570,1,12,26,27,29,33,42\n569,3,6,13,23,24,35,1\n568,1,3,17,20,31,44,40\n567,1,10,15,16,32,41,28\n566,4,5,6,25,26,43,41\n565,4,10,18,27,40,45,38\n564,14,19,25,26,27,34,2\n563,5,10,16,17,31,32,21\n562,4,11,13,17,20,31,33\n561,5,7,18,37,42,45,20\n560,1,4,20,23,29,45,28\n559,11,12,25,32,44,45,23\n558,12,15,19,26,40,43,29\n557,4,20,26,28,35,40,31\n556,12,20,23,28,30,44,43\n555,11,17,21,24,26,36,12\n554,13,14,17,32,41,42,6\n553,2,7,17,28,29,39,37\n552,1,10,20,32,35,40,43\n551,3,6,20,24,27,44,25\n550,1,7,14,20,34,37,41\n549,29,31,35,38,40,44,17\n548,1,12,13,21,32,45,14\n547,6,7,15,22,34,39,28\n546,8,17,20,27,37,43,6\n545,4,24,25,27,34,35,2\n544,5,17,21,25,36,44,10\n543,13,18,26,31,34,44,12\n542,5,6,19,26,41,45,34\n541,8,13,26,28,32,34,43\n540,3,12,13,15,34,36,14\n539,3,19,22,31,42,43,26\n538,6,10,18,31,32,34,11\n537,12,23,26,30,36,43,11\n536,7,8,18,32,37,43,12\n535,11,12,14,15,18,39,34\n534,10,24,26,29,37,38,32\n533,9,14,15,17,31,33,23\n532,16,17,23,24,29,44,3\n531,1,5,9,21,27,35,45\n530,16,23,27,29,33,41,22\n529,18,20,24,27,31,42,39\n528,5,17,25,31,39,40,10\n527,1,12,22,32,33,42,38\n526,7,14,17,20,35,39,31\n525,11,23,26,29,39,44,22\n524,10,11,29,38,41,45,21\n523,1,4,37,38,40,45,7\n522,4,5,13,14,37,41,11\n521,3,7,18,29,32,36,19\n520,4,22,27,28,38,40,1\n519,6,8,13,16,30,43,3\n518,14,23,30,32,34,38,6\n517,1,9,12,28,36,41,10\n516,2,8,23,41,43,44,30\n515,2,11,12,15,23,37,8\n514,1,15,20,26,35,42,9\n513,5,8,21,23,27,33,12\n512,4,5,9,13,26,27,1\n511,3,7,14,23,26,42,24\n510,12,29,32,33,39,40,42\n509,12,25,29,35,42,43,24\n508,5,27,31,34,35,43,37\n507,12,13,32,33,40,41,4\n506,6,9,11,22,24,30,31\n505,7,20,22,25,38,40,44\n504,6,14,22,26,43,44,31\n503,1,5,27,30,34,36,40\n502,6,22,28,32,34,40,26\n501,1,4,10,17,31,42,2\n500,3,4,12,20,24,34,41\n499,5,20,23,27,35,40,43\n498,13,14,24,32,39,41,3\n497,19,20,23,24,43,44,13\n496,4,13,20,29,36,41,39\n495,4,13,22,27,34,44,6\n494,5,7,8,15,30,43,22\n493,20,22,26,33,36,37,25\n492,22,27,31,35,37,40,42\n491,8,17,35,36,39,42,4\n490,2,7,26,29,40,43,42\n489,2,4,8,15,20,27,11\n488,2,8,17,30,31,38,25\n487,4,8,25,27,37,41,21\n486,1,2,23,25,38,40,43\n485,17,22,26,27,36,39,20\n484,1,3,27,28,32,45,11\n483,12,15,19,22,28,34,5\n482,1,10,16,24,25,35,43\n481,3,4,23,29,40,41,20\n480,3,5,10,17,30,31,16\n479,8,23,25,27,35,44,24\n478,18,29,30,37,39,43,8\n477,14,25,29,32,33,45,37\n476,9,12,13,15,37,38,27\n475,1,9,14,16,21,29,3\n474,4,13,18,31,33,45,43\n473,8,13,20,22,23,36,34\n472,16,25,26,31,36,43,44\n471,6,13,29,37,39,41,43\n470,10,16,20,39,41,42,27\n469,4,21,22,34,37,38,33\n468,8,13,15,28,37,43,17\n467,2,12,14,17,24,40,39\n466,4,10,13,23,32,44,20\n465,1,8,11,13,22,38,31\n464,6,12,15,34,42,44,4\n463,23,29,31,33,34,44,40\n462,3,20,24,32,37,45,4\n461,11,18,26,31,37,40,43\n460,8,11,28,30,43,45,41\n459,4,6,10,14,25,40,12\n458,4,9,10,32,36,40,18\n457,8,10,18,23,27,40,33\n456,1,7,12,18,23,27,44\n455,4,19,20,26,30,35,24\n454,13,25,27,34,38,41,10\n453,12,24,33,38,40,42,30\n452,8,10,18,30,32,34,27\n451,12,15,20,24,30,38,29\n450,6,14,19,21,23,31,13\n449,3,10,20,26,35,43,36\n448,3,7,13,27,40,41,36\n447,2,7,8,9,17,33,34\n446,1,11,12,14,26,35,6\n445,13,20,21,30,39,45,32\n444,11,13,23,35,43,45,17\n443,4,6,10,19,20,44,14\n442,25,27,29,36,38,40,41\n441,1,23,28,30,34,35,9\n440,10,22,28,34,36,44,2\n439,17,20,30,31,37,40,25\n438,6,12,20,26,29,38,45\n437,11,16,29,38,41,44,21\n436,9,14,20,22,33,34,28\n435,8,16,26,30,38,45,42\n434,3,13,20,24,33,37,35\n433,19,23,29,33,35,43,27\n432,2,3,5,11,27,39,33\n431,18,22,25,31,38,45,6\n430,1,3,16,18,30,34,44\n429,3,23,28,34,39,42,16\n428,12,16,19,22,37,40,8\n427,6,7,15,24,28,30,21\n426,4,17,18,27,39,43,19\n425,8,10,14,27,33,38,3\n424,10,11,26,31,34,44,30\n423,1,17,27,28,29,40,5\n422,8,15,19,21,34,44,12\n421,6,11,26,27,28,44,30\n420,4,9,10,29,31,34,27\n419,2,11,13,14,28,30,7\n418,11,13,15,26,28,34,31\n417,4,5,14,20,22,43,44\n416,5,6,8,11,22,26,44\n415,7,17,20,26,30,40,24\n414,2,14,15,22,23,44,43\n413,2,9,15,23,34,40,3\n412,4,7,39,41,42,45,40\n411,11,14,22,35,37,39,5\n410,1,3,18,32,40,41,16\n409,6,9,21,31,32,40,38\n408,9,20,21,22,30,37,16\n407,6,7,13,16,24,25,1\n406,7,12,21,24,27,36,45\n405,1,2,10,25,26,44,4\n404,5,20,21,24,33,40,36\n403,10,14,22,24,28,37,26\n402,5,9,15,19,22,36,32\n401,6,12,18,31,38,43,9\n400,9,21,27,34,41,43,2\n399,1,2,9,17,19,42,20\n398,10,15,20,23,42,44,7\n397,12,13,17,22,25,33,8\n396,18,20,31,34,40,45,30\n395,11,15,20,26,31,35,7\n394,1,13,20,22,25,28,15\n393,9,16,28,40,41,43,21\n392,1,3,7,8,24,42,43\n391,10,11,18,22,28,39,30\n390,16,17,28,37,39,40,15\n389,7,16,18,20,23,26,3\n388,1,8,9,17,29,32,45\n387,1,26,31,34,40,43,20\n386,4,7,10,19,31,40,26\n385,7,12,19,21,29,32,9\n384,11,22,24,32,36,38,7\n383,4,15,28,33,37,40,25\n382,10,15,22,24,27,42,19\n381,1,5,10,12,16,20,11\n380,1,2,8,17,26,37,27\n379,6,10,22,31,35,40,19\n378,5,22,29,31,34,39,43\n377,6,22,29,37,43,45,23\n376,1,11,13,24,28,40,7\n375,4,8,19,25,27,45,7\n374,11,13,15,17,25,34,26\n373,15,26,37,42,43,45,9\n372,8,11,14,16,18,21,13\n371,7,9,15,26,27,42,18\n370,16,18,24,42,44,45,17\n369,17,20,35,36,41,43,21\n368,11,21,24,30,39,45,26\n367,3,22,25,29,32,44,19\n366,5,12,19,26,27,44,38\n365,5,15,21,25,26,30,31\n364,2,5,7,14,16,40,4\n363,11,12,14,21,32,38,6\n362,2,3,22,27,30,40,29\n361,5,10,16,24,27,35,33\n360,4,16,23,25,35,40,27\n359,1,10,19,20,24,40,23\n358,1,9,10,12,21,40,37\n357,10,14,18,21,36,37,5\n356,2,8,14,25,29,45,24\n355,5,8,29,30,35,44,38\n354,14,19,36,43,44,45,1\n353,11,16,19,22,29,36,26\n352,5,16,17,20,26,41,24\n351,5,25,27,29,34,36,33\n350,1,8,18,24,29,33,35\n349,5,13,14,20,24,25,36\n348,3,14,17,20,24,31,34\n347,3,8,13,27,32,42,10\n346,5,13,14,22,44,45,33\n345,15,20,23,29,39,42,2\n344,1,2,15,28,34,45,38\n343,1,10,17,29,31,43,15\n342,1,13,14,33,34,43,25\n341,1,8,19,34,39,43,41\n340,18,24,26,29,34,38,32\n339,6,8,14,21,30,37,45\n338,2,13,34,38,42,45,16\n337,1,5,14,18,32,37,4\n336,3,5,20,34,35,44,16\n335,5,9,16,23,26,45,21\n334,13,15,21,29,39,43,33\n333,5,14,27,30,39,43,35\n332,16,17,34,36,42,45,3\n331,4,9,14,26,31,44,39\n330,3,4,16,17,19,20,23\n329,9,17,19,30,35,42,4\n328,1,6,9,16,17,28,24\n327,6,12,13,17,32,44,24\n326,16,23,25,33,36,39,40\n325,7,17,20,32,44,45,33\n324,2,4,21,25,33,36,17\n323,10,14,15,32,36,42,3\n322,9,18,29,32,38,43,20\n321,12,18,20,21,25,34,42\n320,16,19,23,25,41,45,3\n319,5,8,22,28,33,42,37\n318,2,17,19,20,34,45,21\n317,3,10,11,22,36,39,8\n316,10,11,21,27,31,39,43\n315,1,13,33,35,43,45,23\n314,15,17,19,34,38,41,2\n313,9,17,34,35,43,45,2\n312,2,3,5,6,12,20,25\n311,4,12,24,27,28,32,10\n310,1,5,19,28,34,41,16\n309,1,2,5,11,18,36,22\n308,14,15,17,19,37,45,40\n307,5,15,21,23,25,45,12\n306,4,18,23,30,34,41,19\n305,7,8,18,21,23,39,9\n304,4,10,16,26,33,41,38\n303,2,14,17,30,38,45,43\n302,13,19,20,32,38,42,4\n301,7,11,13,33,37,43,26\n300,7,9,10,12,26,38,39\n299,1,3,20,25,36,45,24\n298,5,9,27,29,37,40,19\n297,6,11,19,20,28,32,34\n296,3,8,15,27,30,45,44\n295,1,4,12,16,18,38,8\n294,6,10,17,30,37,38,40\n293,1,9,17,21,29,33,24\n292,17,18,31,32,33,34,10\n291,3,7,8,18,20,42,45\n290,8,13,18,32,39,45,7\n289,3,14,33,37,38,42,10\n288,1,12,17,28,35,41,10\n287,6,12,24,27,35,37,41\n286,1,15,19,40,42,44,17\n285,13,33,37,40,41,45,2\n284,2,7,15,24,30,45,28\n283,6,8,18,31,38,45,42\n282,2,5,10,18,31,32,30\n281,1,3,4,6,14,41,12\n280,10,11,23,24,36,37,35\n279,7,16,31,36,37,38,11\n278,3,11,37,39,41,43,13\n277,10,12,13,15,25,29,20\n276,4,15,21,33,39,41,25\n275,14,19,20,35,38,40,26\n274,13,14,15,26,35,39,25\n273,1,8,24,31,34,44,6\n272,7,9,12,27,39,43,28\n271,3,8,9,27,29,40,36\n270,5,9,12,20,21,26,27\n269,5,18,20,36,42,43,32\n268,3,10,19,24,32,45,12\n267,7,8,24,34,36,41,1\n266,3,4,9,11,22,42,37\n265,5,9,34,37,38,39,12\n264,9,16,27,36,41,44,5\n263,1,27,28,32,37,40,18\n262,9,12,24,25,29,31,36\n261,6,11,16,18,31,43,2\n260,7,12,15,24,37,40,43\n259,4,5,14,35,42,45,34\n258,14,27,30,31,38,40,17\n257,6,13,27,31,32,37,4\n256,4,11,14,21,23,43,32\n255,1,5,6,24,27,42,32\n254,1,5,19,20,24,30,27\n253,8,19,25,31,34,36,33\n252,14,23,26,31,39,45,28\n251,6,7,19,25,28,38,45\n250,19,23,30,37,43,45,38\n249,3,8,27,31,41,44,11\n248,3,8,17,23,38,45,13\n247,12,15,28,36,39,40,13\n246,13,18,21,23,26,39,15\n245,9,11,27,31,32,38,22\n244,13,16,25,36,37,38,19\n243,2,12,17,19,28,42,34\n242,4,19,20,21,32,34,43\n241,2,16,24,27,28,35,21\n240,6,10,16,40,41,43,21\n239,11,15,24,39,41,44,7\n238,2,4,15,28,31,34,35\n237,1,11,17,21,24,44,33\n236,1,4,8,13,37,39,7\n235,21,22,26,27,31,37,8\n234,13,21,22,24,26,37,4\n233,4,6,13,17,28,40,39\n232,8,9,10,12,24,44,35\n231,5,10,19,31,44,45,27\n230,5,11,14,29,32,33,12\n229,4,5,9,11,23,38,35\n228,17,25,35,36,39,44,23\n227,4,5,15,16,22,42,2\n226,2,6,8,14,21,22,34\n225,5,11,13,19,31,36,7\n224,4,19,26,27,30,42,7\n223,1,3,18,20,26,27,38\n222,5,7,28,29,39,43,44\n221,2,20,33,35,37,40,10\n220,5,11,19,21,34,43,31\n219,4,11,20,26,35,37,16\n218,1,8,14,18,29,44,20\n217,16,20,27,33,35,39,38\n216,7,16,17,33,36,40,1\n215,2,3,7,15,43,44,4\n214,5,7,20,25,28,37,32\n213,2,3,4,5,20,24,42\n212,11,12,18,21,31,38,8\n211,12,13,17,20,33,41,8\n210,10,19,22,23,25,37,39\n209,2,7,18,20,24,33,37\n208,14,25,31,34,40,44,24\n207,3,11,14,31,32,37,38\n206,1,2,3,15,20,25,43\n205,1,3,21,29,35,37,30\n204,3,12,14,35,40,45,5\n203,1,3,11,24,30,32,7\n202,12,14,27,33,39,44,17\n201,3,11,24,38,39,44,26\n200,5,6,13,14,17,20,7\n199,14,21,22,25,30,36,43\n198,12,19,20,25,41,45,2\n197,7,12,16,34,42,45,4\n196,35,36,37,41,44,45,30\n195,7,10,19,22,35,40,31\n194,15,20,23,26,39,44,28\n193,6,14,18,26,36,39,13\n192,4,8,11,18,37,45,33\n191,5,6,24,25,32,37,8\n190,8,14,18,30,31,44,15\n189,8,14,32,35,37,45,28\n188,19,24,27,30,31,34,36\n187,1,2,8,18,29,38,42\n186,4,10,14,19,21,45,9\n185,1,2,4,8,19,38,14\n184,1,2,6,16,20,33,41\n183,2,18,24,34,40,42,5\n182,13,15,27,29,34,40,35\n181,14,21,23,32,40,45,44\n180,2,15,20,21,29,34,22\n179,5,9,17,25,39,43,32\n178,1,5,11,12,18,23,9\n177,1,10,13,16,37,43,6\n176,4,17,30,32,33,34,15\n175,19,26,28,31,33,36,17\n174,13,14,18,22,35,39,16\n173,3,9,24,30,33,34,18\n172,4,19,21,24,26,41,35\n171,4,16,25,29,34,35,1\n170,2,11,13,15,31,42,10\n169,16,27,35,37,43,45,19\n168,3,10,31,40,42,43,30\n167,24,27,28,30,36,39,4\n166,9,12,27,36,39,45,14\n165,5,13,18,19,22,42,31\n164,6,9,10,11,39,41,27\n163,7,11,26,28,29,44,16\n162,1,5,21,25,38,41,24\n161,22,34,36,40,42,45,44\n160,3,7,8,34,39,41,1\n159,1,18,30,41,42,43,32\n158,4,9,13,18,21,34,7\n157,19,26,30,33,35,39,37\n156,5,18,28,30,42,45,2\n155,16,19,20,32,33,41,4\n154,6,19,21,35,40,45,20\n153,3,8,11,12,13,36,33\n152,1,5,13,26,29,34,43\n151,1,2,10,13,18,19,15\n150,2,18,25,28,37,39,16\n149,2,11,21,34,41,42,27\n148,21,25,33,34,35,36,17\n147,4,6,13,21,40,42,36\n146,2,19,27,35,41,42,25\n145,2,3,13,20,27,44,9\n144,4,15,17,26,36,37,43\n143,26,27,28,42,43,45,8\n142,12,16,30,34,40,44,19\n141,8,12,29,31,42,43,2\n140,3,13,17,18,19,28,8\n139,9,11,15,20,28,43,13\n138,10,11,27,28,37,39,19\n137,7,9,20,25,36,39,15\n136,2,16,30,36,41,42,11\n135,6,14,22,28,35,39,16\n134,3,12,20,23,31,35,43\n133,4,7,15,18,23,26,13\n132,3,17,23,34,41,45,43\n131,8,10,11,14,15,21,37\n130,7,19,24,27,42,45,31\n129,19,23,25,28,38,42,17\n128,12,30,34,36,37,45,39\n127,3,5,10,29,32,43,35\n126,7,20,22,27,40,43,1\n125,2,8,32,33,35,36,18\n124,4,16,23,25,29,42,1\n123,7,17,18,28,30,45,27\n122,1,11,16,17,36,40,8\n121,12,28,30,34,38,43,9\n120,4,6,10,11,32,37,30\n119,3,11,13,14,17,21,38\n118,3,4,10,17,19,22,38\n117,5,10,22,34,36,44,35\n116,2,4,25,31,34,37,17\n115,1,2,6,9,25,28,31\n114,11,14,19,26,28,41,2\n113,4,9,28,33,36,45,26\n112,26,29,30,33,41,42,43\n111,7,18,31,33,36,40,27\n110,7,20,22,23,29,43,1\n109,1,5,34,36,42,44,33\n108,7,18,22,23,29,44,12\n107,1,4,5,6,9,31,17\n106,4,10,12,22,24,33,29\n105,8,10,20,34,41,45,28\n104,17,32,33,34,42,44,35\n103,5,14,15,27,30,45,10\n102,17,22,24,26,35,40,42\n101,1,3,17,32,35,45,8\n100,1,7,11,23,37,42,6\n99,1,3,10,27,29,37,11\n98,6,9,16,23,24,32,43\n97,6,7,14,15,20,36,3\n96,1,3,8,21,22,31,20\n95,8,17,27,31,34,43,14\n94,5,32,34,40,41,45,6\n93,6,22,24,36,38,44,19\n92,3,14,24,33,35,36,17\n91,1,21,24,26,29,42,27\n90,17,20,29,35,38,44,10\n89,4,26,28,29,33,40,37\n88,1,17,20,24,30,41,27\n87,4,12,16,23,34,43,26\n86,2,12,37,39,41,45,33\n85,6,8,13,23,31,36,21\n84,16,23,27,34,42,45,11\n83,6,10,15,17,19,34,14\n82,1,2,3,14,27,42,39\n81,5,7,11,13,20,33,6\n80,17,18,24,25,26,30,1\n79,3,12,24,27,30,32,14\n78,10,13,25,29,33,35,38\n77,2,18,29,32,43,44,37\n76,1,3,15,22,25,37,43\n75,2,5,24,32,34,44,28\n74,6,15,17,18,35,40,23\n73,3,12,18,32,40,43,38\n72,2,4,11,17,26,27,1\n71,5,9,12,16,29,41,21\n70,5,19,22,25,28,43,26\n69,5,8,14,15,19,39,35\n68,10,12,15,16,26,39,38\n67,3,7,10,15,36,38,33\n66,2,3,7,17,22,24,45\n65,4,25,33,36,40,43,39\n64,14,15,18,21,26,36,39\n63,3,20,23,36,38,40,5\n62,3,8,15,27,29,35,21\n61,14,15,19,30,38,43,8\n60,2,8,25,36,39,42,11\n59,6,29,36,39,41,45,13\n58,10,24,25,33,40,44,1\n57,7,10,16,25,29,44,6\n56,10,14,30,31,33,37,19\n55,17,21,31,37,40,44,7\n54,1,8,21,27,36,39,37\n53,7,8,14,32,33,39,42\n52,2,4,15,16,20,29,1\n51,2,3,11,16,26,44,35\n50,2,10,12,15,22,44,1\n49,4,7,16,19,33,40,30\n48,6,10,18,26,37,38,3\n47,14,17,26,31,36,45,27\n46,8,13,15,23,31,38,39\n45,1,10,20,27,33,35,17\n44,3,11,21,30,38,45,39\n43,6,31,35,38,39,44,1\n42,17,18,19,21,23,32,1\n41,13,20,23,35,38,43,34\n40,7,13,18,19,25,26,6\n39,6,7,13,15,21,43,8\n38,16,17,22,30,37,43,36\n37,7,27,30,33,35,37,42\n36,1,10,23,26,28,40,31\n35,2,3,11,26,37,43,39\n34,9,26,35,37,40,42,2\n33,4,7,32,33,40,41,9\n32,6,14,19,25,34,44,11\n31,7,9,18,23,28,35,32\n30,8,17,20,35,36,44,4\n29,1,5,13,34,39,40,11\n28,9,18,23,25,35,37,1\n27,1,20,26,28,37,43,27\n26,4,5,7,18,20,25,31\n25,2,4,21,26,43,44,16\n24,7,8,27,29,36,43,6\n23,5,13,17,18,33,42,44\n22,4,5,6,8,17,39,25\n21,6,12,17,18,31,32,21\n20,10,14,18,20,23,30,41\n19,6,30,38,39,40,43,26\n18,3,12,13,19,32,35,29\n17,3,4,9,17,32,37,1\n16,6,7,24,37,38,40,33\n15,3,4,16,30,31,37,13\n14,2,6,12,31,33,40,15\n13,22,23,25,37,38,42,26\n12,2,11,21,25,39,45,44\n11,1,7,36,37,41,42,14\n10,9,25,30,33,41,44,6\n9,2,4,16,17,36,39,14\n8,8,19,25,34,37,39,9\n7,2,9,16,25,26,40,42\n6,14,15,26,27,40,42,34\n5,16,24,29,40,41,42,3\n4,14,27,30,31,40,42,2\n3,11,16,19,21,27,31,30\n2,9,13,21,25,32,42,2\n1,10,23,29,33,37,40,16`;
+        let allData=[];
+        
+        function loadData(){
+            allData=rawData.trim().split("\n").map(e=>{
+                const t=e.replace("\r","").split(",").map(e=>parseInt(e.trim()));
+                return{round:t[0],numbers:[t[1],t[2],t[3],t[4],t[5],t[6]],bonus:t[7]}
+            }).filter(e=>!isNaN(e.round));
+            allData.sort((e,t)=>t.round-e.round);
+            renderTable();
+            renderChart();
+            updateAIAnalysis();
+        }
+        
+        function updateAIAnalysis(){
+            const displayData=allData.slice(0,currentRange);
+            const hitCounts=new Array(46).fill(0);
+            const currentMiss={};
+            
+            displayData.forEach(draw=>{
+                draw.numbers.forEach(num=>{hitCounts[num]++});
+            });
+            
+            // 현재 미당첨 계산
+            const reversedData=[...displayData].reverse();
+            for(let i=1;i<=45;i++){currentMiss[i]=0}
+            reversedData.forEach(draw=>{
+                draw.numbers.forEach(num=>{currentMiss[num]=0});
+                for(let i=1;i<=45;i++){
+                    if(!draw.numbers.includes(i)){currentMiss[i]++}
+                }
+            });
+            
+            // 통계 계산
+            const missValues=Object.values(currentMiss);
+            const avgMiss=(missValues.reduce((a,b)=>a+b,0)/45).toFixed(1);
+            const maxMissNum=Object.keys(currentMiss).reduce((a,b)=>currentMiss[a]>currentMiss[b]?a:b);
+            const minMissNum=Object.keys(currentMiss).reduce((a,b)=>currentMiss[a]<currentMiss[b]?a:b);
+            
+            const hitValues=hitCounts.slice(1);
+            const avgHit=(hitValues.reduce((a,b)=>a+b,0)/45).toFixed(1);
+            const maxHitNum=hitCounts.indexOf(Math.max(...hitValues));
+            const minHitNum=hitCounts.indexOf(Math.min(...hitValues));
+            
+            // 최근 추세 (최근 10회)
+            const recent10=allData.slice(0,Math.min(10,currentRange));
+            const recent10Numbers=recent10.flatMap(d=>d.numbers);
+            const recentFreq={};
+            recent10Numbers.forEach(n=>{recentFreq[n]=(recentFreq[n]||0)+1});
+            const hotNumbers=Object.entries(recentFreq).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n])=>n);
+            
+            // 패턴 분석
+            document.getElementById('aiPatternText').innerHTML=
+                `선택한 최근 ${currentRange}회차 분석 결과, <strong>${maxHitNum}번</strong>이 <strong>${hitCounts[maxHitNum]}회</strong>로 가장 많이 출현했습니다. `+
+                `반면 <strong>${minHitNum}번</strong>은 <strong>${hitCounts[minHitNum]}회</strong>만 출현하여 가장 저조한 출현율을 보였습니다. `+
+                `번호별 평균 출현 횟수는 <strong>${avgHit}회</strong>이며, 출현 편차가 큰 편입니다.`;
+            
+            // 추세 분석
+            document.getElementById('aiTrendText').innerHTML=
+                `현재 <strong>${maxMissNum}번</strong>이 <strong>${currentMiss[maxMissNum]}회</strong> 연속 미출현으로 가장 긴 공백기를 보이고 있습니다. `+
+                `최근 10회차에서는 <strong>${hotNumbers.join(', ')}번</strong>이 빈번하게 출현하는 '핫 넘버' 경향을 보입니다. `+
+                `평균 미출현 기간은 <strong>${avgMiss}회</strong>이며, 이는 각 번호가 평균적으로 ${avgMiss}회마다 한 번씩 출현함을 의미합니다.`;
+            
+            // 전략 제안
+            const strategy=currentMiss[maxMissNum]>avgMiss*2
+                ?`<strong>${maxMissNum}번</strong>은 평균 대비 2배 이상 미출현 상태로, 통계적 회귀 가능성을 고려할 수 있습니다.`
+                :`미출현 기간이 평균에 근접한 번호들을 주목하세요.`;
+            
+            document.getElementById('aiStrategyText').innerHTML=
+                `${strategy} `+
+                `최근 출현 빈도가 높은 <strong>${hotNumbers[0]}번</strong>과 미출현이 긴 <strong>${maxMissNum}번</strong>을 조합하여 밸런스를 맞추는 전략을 고려해보세요. `+
+                `또한 평균 출현율(<strong>${avgHit}회</strong>) 부근의 번호들을 중심으로 선택하면 안정적인 조합이 가능합니다.`;
+        }
+        
+        function renderChart(){
+            const displayData=allData.slice(0,currentRange);
+            const hitCounts=new Array(46).fill(0);
+            
+            displayData.forEach(draw=>{
+                draw.numbers.forEach(num=>{hitCounts[num]++});
+            });
+            
+            const chartData=[];
+            for(let i=1;i<=45;i++){
+                chartData.push({num:i,count:hitCounts[i],rate:(hitCounts[i]/currentRange*100).toFixed(1)});
+            }
+            
+            // Calculate Average Hits
+            const totalHits = chartData.reduce((sum, item) => sum + item.count, 0);
+            const avgHit = totalHits / 45;
+            
+            const maxCount=Math.max(...chartData.map(d=>d.count));
+            const chart=document.getElementById('chart');
+            chart.innerHTML='';
+            
+            chartData.forEach(d=>{
+                const barHeight=(d.count/maxCount*100);
+                
+                // Determine color based on average
+                let bgStyle;
+                if (d.count > avgHit) {
+                    // Above Average: Brightening Red (Rose to Orange)
+                    bgStyle = "background: linear-gradient(to top, #f43f5e, #f97316); box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3);";
+                } else {
+                    // Below Average: Emerald Blue (Teal to Sky)
+                    bgStyle = "background: linear-gradient(to top, #0ea5e9, #10b981); box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);";
+                }
+
+                const wrapper=document.createElement('div');
+                wrapper.className='chart-bar-wrapper group relative';
+                wrapper.innerHTML=`
+                    <div class="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-[10px] py-0.5 px-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">${d.count}회</div>
+                    <div class="bar-fill" style="height:${Math.max(barHeight, 5)}%; ${bgStyle}"></div>
+                    <div class="text-[9px] font-medium text-gray-500 mt-1.5 text-center w-full">${d.num}</div>
+                `;
+                chart.appendChild(wrapper);
+            });
+        }
+        
+        function renderTable(){
+            const displayData=allData.slice(0,currentRange);
+            const hitCounts=new Array(46).fill(0);
+            
+            displayData.forEach(draw=>{
+                draw.numbers.forEach(num=>{hitCounts[num]++});
+            });
+            
+            const currentMiss={};
+            const missHistory={}; 
+            const reversedData=[...displayData].reverse();
+            
+            for(let i=1;i<=45;i++){currentMiss[i]=0}
+            
+            reversedData.forEach(draw=>{
+                draw.numbers.forEach(num=>{currentMiss[num]=0});
+                for(let i=1;i<=45;i++){
+                    if(!draw.numbers.includes(i)){currentMiss[i]++}
+                }
+                missHistory[draw.round] = {...currentMiss};
+            });
+            
+            let numberOrder=Array.from({length:45},(e,i)=>i+1);
+            if(sortByMissCount){
+                const latestMiss = missHistory[displayData[0].round];
+                numberOrder.sort((a,b)=>latestMiss[a]-latestMiss[b]);
+            }
+            
+            const thead=document.querySelector("#statsTable thead tr");
+            thead.innerHTML='<th class="round-col">회차</th>';
+            numberOrder.forEach(num=>{
+                const th=document.createElement("th");
+                th.className="number-header";
+                th.textContent=num;
+                thead.appendChild(th);
+            });
+            
+            const rowData=[];
+            
+            displayData.forEach((draw, index)=>{
+                const cells={};
+                const prevDraw = allData[index + 1];
+                const prevNumbers = prevDraw ? prevDraw.numbers : [];
+
+                numberOrder.forEach(num=>{
+                    if(draw.numbers.includes(num)){
+                        if(prevNumbers.includes(num)){
+                            cells[num]={type:'carry'};
+                        } else {
+                            cells[num]={type:'hit'};
+                        }
+                    } else {
+                        cells[num]={type:'miss',count:missHistory[draw.round][num]};
+                    }
+                });
+                rowData.push({round:draw.round,cells:cells});
+            });
+            
+            const tbody=document.getElementById("tableBody");
+            let html='<tr class="count-row"><td class="round-col">당첨횟수</td>';
+            numberOrder.forEach(num=>{html+=`<td>${hitCounts[num]}</td>`});
+            html+='</tr>';
+            
+            rowData.forEach(row=>{
+                html+=`<tr><td class="round-col">${row.round}회</td>`;
+                numberOrder.forEach(num=>{
+                    const cell=row.cells[num];
+                    if(cell.type==='hit'){
+                        html+=`<td><div class="flex justify-center items-center h-full"><span class="marker marker-hit"></span></div></td>`;
+                    }else if(cell.type==='carry'){
+                        html+=`<td><div class="flex justify-center items-center h-full"><span class="marker marker-carry"></span></div></td>`;
+                    }else{
+                        const missClass = cell.count >= 10 ? 'miss-high' : 'cell-miss';
+                        html+=`<td><span class="${missClass}">${cell.count}</span></td>`;
+                    }
+                });
+                html+='</tr>';
+            });
+            
+            tbody.innerHTML=html;
+        }
+        
+        function updateRange(e){
+            currentRange=parseInt(e);
+            document.getElementById("rangeLabel").textContent=1203==e?"전체 회차":"최근 "+e+"회차";
+            updateRangeButtons(e);
+            renderTable();
+            renderChart();
+            updateAIAnalysis();
+        }
+        
+        function setRange(e){
+            document.getElementById("rangeSlider").value=e;
+            updateRange(e);
+        }
+        
+        function updateRangeButtons(e){
+            [10,30,50,100,1203].forEach(t=>{
+                const btn=document.getElementById("btn"+t);
+                if(btn){
+                     btn.className = "range-btn px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200 transition-all";
+                }
+            });
+            const activeBtn = document.getElementById("btn"+e);
+            if(activeBtn) {
+                activeBtn.className = "range-btn px-3 py-1.5 text-xs font-bold rounded-lg bg-[#0ea5e9] text-white shadow-md shadow-blue-200 border border-transparent transition-all";
+            }
+        }
+        
+        function toggleSort(){
+            sortByMissCount=!sortByMissCount;
+            const btn=document.querySelector('button[onclick="toggleSort()"]');
+            const btnText=document.getElementById("sortButtonText");
+            if(sortByMissCount){
+                btn.className='w-full py-2.5 text-xs font-bold rounded-xl bg-gray-900 text-white hover:bg-gray-800 flex items-center justify-center gap-2 transition-all shadow-lg shadow-gray-200';
+                btnText.textContent='미당첨 짧은 순 정렬 중';
+            }else{
+                btn.className='w-full py-2.5 text-xs font-bold rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2 transition-all shadow-sm';
+                btnText.textContent='번호순 정렬';
+            }
+            renderTable();
+        }
+        
+        document.addEventListener("DOMContentLoaded",function(){
+            loadData();
+            updateRangeButtons(73);
+        });
+    </script>
+</body>
+</html>
