@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html class="light" lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Lotto Lab - 배수 (Supabase AI)</title>
+    <link as="style" crossorigin="" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script src="js/layout.js"></script>
+
+    <script>
+        // ✅ Supabase 설정
+        const SUPABASE_URL = 'https://dkcflmyoscudawleglzb.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrY2ZsbXlvc2N1ZGF3bGVnbHpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1NDQ4OTAsImV4cCI6MjA4MzEyMDg5MH0.haAvbpScvMJv1uqH_tk-0fUlJNCpHnlWBtYzX6YFweo';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let allDrawData = [];
+        let currentRange = 100;
+        let chartTab = 'rate'; // 'rate' or 'trend'
+        let trendChartInstance = null;
+        
+        // 초기 상태: 선택된 배수 없음 (종합 분석 모드)
+        let selectedGraphType = null; 
+
+        // 배수 정의
+        const multipleDefinitions = {
+            '3배수': [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45],
+            '4배수': [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44],
+            '5배수': [5, 10, 15, 20, 25, 30, 35, 40, 45],
+            '3·4배수': [12, 24, 36],
+            '3·5배수': [15, 30, 45],
+            '4·5배수': [20, 40],
+            '배수외': [1, 2, 7, 11, 13, 14, 17, 19, 22, 23, 26, 29, 31, 34, 37, 38, 41, 43]
+        };
+
+        // 색상 정의
+        const multipleColors = {
+            '3배수': '#4F6AFF',
+            '4배수': '#10B981',
+            '5배수': '#EC4899',
+            '3·4배수': '#8B5CF6',
+            '3·5배수': '#F59E0B',
+            '4·5배수': '#14B8A6',
+            '배수외': '#6B7280'
+        };
+
+        // 필터 상태
+        let filterState = {}; 
+
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "active-green": "#E6FFED",
+                        "active-text": "#16A34A",
+                        "lotto-blue": "#3B82F6",
+                        "lotto-orange": "#F97316"
+                    },
+                    fontFamily: {
+                        "sans": ["Pretendard", "Inter", "sans-serif"],
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .material-symbols-outlined.filled { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        /* 슬라이더 스타일 */
+        input[type="range"] { 
+            -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; background: #E5E7EB; outline: none; cursor: pointer; 
+            background-image: linear-gradient(#3B82F6, #3B82F6); background-size: var(--value-percent, 0%) 100%; background-repeat: no-repeat; 
+        }
+        input[type="range"]::-webkit-slider-thumb { 
+            -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #3B82F6; cursor: pointer; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.1s; border: 2px solid white; 
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.1); background: #2563EB; }
+
+        .ai-section { background: linear-gradient(135deg, #E0E7FF 0%, #EDE9FE 50%, #FCE7F3 100%); }
+
+        /* 하이라이트 애니메이션 */
+        @keyframes highlightFade {
+            0% { background-color: #FEF3C7; transform: scale(1.02); }
+            100% { background-color: #FEF3C7; transform: scale(1); }
+        }
+        .row-highlight {
+            animation: highlightFade 0.3s ease-out forwards;
+            border-left: 4px solid #F59E0B;
+        }
+
+        /* 공 스타일 */
+        .ball-normal { 
+            background: #FFFFFF; color: #1F2937; border: 1px solid #D1D5DB; 
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-family: 'Pretendard', sans-serif; font-weight: 700;
+        }
+        
+        /* 동적 색상 공 */
+        .ball-custom {
+            color: white; 
+            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            font-family: 'Pretendard', sans-serif; 
+            font-weight: 700;
+        }
+        
+        /* 필터 내 작은 공 스타일 */
+        .lotto-ball-mini { 
+            width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; 
+            font-weight: 700; font-size: 11px; color: white; border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        /* 통계 카드 활성화 스타일 */
+        .stat-card-active {
+            color: white !important;
+            border-color: transparent !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        /* 배수별 당첨수 원형 배지 */
+        .count-badge {
+            width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 13px;
+        }
+    </style>
+</head>
+<body class="bg-[#F9FAFB] font-sans antialiased">
+    <div class="flex flex-col h-screen w-full">
+        
+        <div id="gnb-container"></div>
+
+        <div class="flex flex-1 overflow-hidden">
+            <aside class="w-56 bg-white border-r border-gray-200 overflow-y-auto custom-scrollbar flex-shrink-0" id="lnb-container">
+            </aside>
+
+            <main class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <div class="max-w-7xl mx-auto space-y-6">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 mb-1">배수 분석</h1>
+                        <p class="text-sm text-gray-600">당첨번호 중 3배수, 4배수, 5배수 및 복합배수의 출현 패턴을 분석합니다.</p>
+                    </div>
+
+                    <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                        <p class="text-sm text-gray-500 mb-3">출현 비중 통계 (클릭하여 필터 적용)</p>
+                        <div class="grid grid-cols-7 gap-3 mb-6" id="statCards">
+                            </div>
+
+                        <div class="ai-section rounded-2xl p-6 mb-6">
+                            <div class="flex items-center justify-between mb-5">
+                                <div class="flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-purple-600">psychology</span>
+                                    <h3 class="text-lg font-bold text-gray-900">AI <span id="aiTitleTarget">배수 종합</span> 분석</h3>
+                                </div>
+                                <button onclick="refreshAIAnalysis()" class="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+                                    <span class="material-symbols-outlined text-lg">refresh</span>분석 새로고침
+                                </button>
+                            </div>
+                            <div id="aiAnalysisContent" class="text-sm text-gray-700 leading-relaxed text-left">
+                                <div class="flex items-center gap-2 text-gray-500">
+                                    <span class="material-symbols-outlined text-lg animate-spin">progress_activity</span>
+                                    <span>AI가 데이터를 분석하고 있습니다...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-3">
+                                    <h3 class="text-lg font-bold text-gray-900">그래프</h3>
+                                    <select id="graphTypeSelect" onchange="changeGraphType(this.value)" class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="3배수">3배수</option>
+                                        <option value="4배수">4배수</option>
+                                        <option value="5배수">5배수</option>
+                                        <option value="3·4배수">3·4배수</option>
+                                        <option value="3·5배수">3·5배수</option>
+                                        <option value="4·5배수">4·5배수</option>
+                                        <option value="배수외">배수외</option>
+                                    </select>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button id="tabRate" onclick="setChartTab('rate')" class="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg transition-colors">당첨율</button>
+                                    <button id="tabTrend" onclick="setChartTab('trend')" class="px-4 py-2 text-sm font-medium bg-gray-200 text-gray-700 rounded-lg transition-colors">회차별</button>
+                                </div>
+                            </div>
+                            
+                            <div id="rateChartContainer" class="flex items-end justify-between h-64 mb-4 px-8 border-b border-gray-100 pb-4"></div>
+                            <div id="trendChartContainer" class="h-64 hidden"><canvas id="trendChart"></canvas></div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-bold text-gray-900">분석 회차 범위</h3>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="setRange(50)" id="preset50" class="px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">50회</button>
+                                    <button onclick="setRange(100)" id="preset100" class="px-3 py-1.5 text-sm font-medium bg-blue-500 text-white rounded-lg transition-colors">100회</button>
+                                    <button onclick="setRange(500)" id="preset500" class="px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">500회</button>
+                                    <button onclick="setRange(1203)" id="preset1203" class="px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">전체</button>
+                                </div>
+                            </div>
+                            <div class="space-y-3">
+                                <input type="range" id="rangeSlider" min="10" max="1203" value="100" oninput="updateRange(this.value)"/>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-600">최근 <span id="rangeDisplay" class="font-bold text-blue-600">100</span>회 분석 대상</span>
+                                    <span id="totalRangeDisplay" class="text-gray-500">최대 1,203회</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm" id="filter-page">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-bold text-gray-900">필터</h3>
+                            <button onclick="alert('필터 페이지로 이동')" class="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-base">open_in_new</span>필터 페이지 가기
+                            </button>
+                        </div>
+                        <div class="space-y-6" id="filterContainer">
+                            </div>
+                        <div class="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="applyFilterCheck" onchange="applyFilter()" class="sr-only peer" checked>
+                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                            </label>
+                            <span class="text-sm font-medium text-gray-700">필터 적용 (조합기 연동)</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900 mb-1">회차별 당첨번호 및 배수 현황</h3>
+                                <p class="text-sm text-gray-600">
+                                    최근 <span id="displayedCount" class="font-bold text-blue-600">100</span>회차 표시
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto custom-scrollbar" style="max-height: 600px;">
+                            <table class="w-full text-sm text-left">
+                                <thead class="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200 sticky top-0 z-10">
+                                    <tr>
+                                        <th class="py-3 px-4 text-center w-20 sticky left-0 bg-gray-50 z-20">회차</th>
+                                        <th class="py-3 px-4 text-center sticky bg-gray-50 z-20" style="left: 80px;">당첨번호</th>
+                                        <th class="py-3 px-2 text-center text-xs w-14">3배수</th>
+                                        <th class="py-3 px-2 text-center text-xs w-14">4배수</th>
+                                        <th class="py-3 px-2 text-center text-xs w-14">5배수</th>
+                                        <th class="py-3 px-2 text-center text-xs w-14">3·4배수</th>
+                                        <th class="py-3 px-2 text-center text-xs w-14">3·5배수</th>
+                                        <th class="py-3 px-2 text-center text-xs w-14">4·5배수</th>
+                                        <th class="py-3 px-2 text-center text-xs w-14">배수외</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="drawsList"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Supabase에서 데이터 로드
+                const { data, error } = await supabaseClient
+                    .from('lotto_draws') 
+                    .select('*')
+                    .order('round', { ascending: false })
+                    .range(0, 5000); 
+
+                if (error) throw error;
+                
+                if (!data || data.length === 0) {
+                    document.getElementById('drawsList').innerHTML = '<tr><td colspan="9" class="p-10 text-center">데이터가 없습니다.</td></tr>';
+                    return;
+                }
+
+                processData(data);
+                
+                // 초기 설정
+                const totalCount = allDrawData.length;
+                const rangeSlider = document.getElementById('rangeSlider');
+                rangeSlider.max = totalCount;
+                document.getElementById('totalRangeDisplay').textContent = `최대 ${totalCount.toLocaleString()}회`;
+                document.getElementById('preset1203').setAttribute('onclick', `setRange(${totalCount})`);
+                
+                initFilters(); // 필터 생성 및 초기값 설정
+                initStatCards();
+                
+                updateRange(currentRange); 
+                
+            } catch (err) {
+                console.error('데이터 로드 실패:', err);
+                document.getElementById('drawsList').innerHTML = `<tr><td colspan="9" class="p-10 text-center text-red-500">데이터 로드 실패<br>${err.message}</td></tr>`;
+            }
+        });
+
+        function calculateMultiplesCounts(numbers) {
+            const counts = {};
+            Object.keys(multipleDefinitions).forEach(key => {
+                counts[key] = numbers.filter(n => multipleDefinitions[key].includes(n)).length;
+            });
+            return counts;
+        }
+
+        function processData(rawData) {
+            allDrawData = rawData.map(draw => {
+                const counts = calculateMultiplesCounts(draw.numbers);
+                return { ...draw, counts };
+            });
+        }
+
+        // --- 필터 및 통계 초기화 ---
+
+        function initFilters() {
+            const recent10 = allDrawData.slice(0, 10);
+            const container = document.getElementById('filterContainer');
+            container.innerHTML = '';
+
+            Object.keys(multipleDefinitions).forEach(type => {
+                const counts = recent10.map(d => d.counts[type]);
+                const minVal = Math.min(...counts);
+                const maxVal = Math.max(...counts);
+                
+                filterState[type] = { min: minVal, max: maxVal };
+
+                const numbersHtml = multipleDefinitions[type].map(n => 
+                    `<span class="lotto-ball-mini" style="background-color: ${multipleColors[type]};">${n}</span>`
+                ).join('');
+
+                const gapClass = type === '배수외' ? 'gap-0.5' : 'gap-1';
+
+                const div = document.createElement('div');
+                div.className = 'border-b border-gray-100 pb-4 last:border-0';
+                div.innerHTML = `
+                    <div class="flex items-center justify-between gap-4">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="font-bold text-gray-700 w-16">${type}</span>
+                                <span class="text-xs text-gray-400">(${multipleDefinitions[type].length}개)</span>
+                            </div>
+                            <div class="flex flex-wrap ${gapClass}">
+                                ${numbersHtml}
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-500">최소</span>
+                            <input type="number" min="0" max="6" value="${minVal}" class="w-20 h-9 text-center border border-gray-300 rounded-lg text-sm text-blue-600 font-bold focus:ring-blue-500 focus:border-blue-500">
+                            <span class="text-gray-400">~</span>
+                            <span class="text-sm text-gray-500">최대</span>
+                            <input type="number" min="0" max="6" value="${maxVal}" class="w-20 h-9 text-center border border-gray-300 rounded-lg text-sm text-blue-600 font-bold focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function initStatCards() {
+            const container = document.getElementById('statCards');
+            container.innerHTML = '';
+            
+            Object.keys(multipleDefinitions).forEach(type => {
+                const div = document.createElement('div');
+                div.className = 'bg-white rounded-xl p-3 border border-gray-200 relative overflow-hidden group hover:shadow-md transition-all text-center cursor-pointer stat-card-transition';
+                div.onclick = () => toggleStatCard(type, div);
+                div.id = `card-${type}`;
+                
+                div.innerHTML = `
+                    <div class="text-xs font-semibold text-gray-500 mb-1">${type}</div>
+                    <p id="stat_${type}" class="text-lg font-bold text-gray-900">-</p>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function toggleStatCard(type, element) {
+            // 중복 선택 방지: 같은 카드 클릭 시 선택 해제, 다른 카드 클릭 시 교체
+            if (selectedGraphType === type) {
+                selectedGraphType = null; // 선택 해제 (종합 모드)
+            } else {
+                selectedGraphType = type; // 선택
+            }
+            
+            // UI 업데이트
+            updateStatCardStyles();
+            
+            // 그래프 및 AI 연동
+            if (selectedGraphType) {
+                document.getElementById('graphTypeSelect').value = selectedGraphType;
+            }
+            // 전체 비주얼 업데이트 (리스트, 차트, AI)
+            const displayData = allDrawData.slice(0, currentRange);
+            renderDrawsList(displayData);
+            updateCharts(displayData);
+            refreshAIAnalysis();
+        }
+
+        function updateStatCardStyles() {
+            Object.keys(multipleDefinitions).forEach(type => {
+                const card = document.getElementById(`card-${type}`);
+                if (!card) return;
+
+                if (selectedGraphType === type) {
+                    card.classList.add('stat-card-active');
+                    card.style.backgroundColor = multipleColors[type];
+                    card.querySelector('p').classList.remove('text-gray-900');
+                    card.querySelector('p').classList.add('text-white');
+                    card.querySelector('.text-xs').classList.remove('text-gray-500');
+                    card.querySelector('.text-xs').classList.add('text-white');
+                } else {
+                    card.classList.remove('stat-card-active');
+                    card.style.backgroundColor = 'white';
+                    card.querySelector('p').classList.remove('text-white');
+                    card.querySelector('p').classList.add('text-gray-900');
+                    card.querySelector('.text-xs').classList.remove('text-white');
+                    card.querySelector('.text-xs').classList.add('text-gray-500');
+                }
+            });
+        }
+
+        // --- 업데이트 및 렌더링 ---
+
+        function updateRange(value) {
+            currentRange = parseInt(value);
+            document.getElementById('rangeDisplay').textContent = value + '회';
+            updateSliderBackground(value);
+            updatePresetButtons(currentRange);
+            
+            const displayData = allDrawData.slice(0, currentRange);
+            updateStats(displayData);
+            renderDrawsList(displayData);
+            updateCharts(displayData);
+            refreshAIAnalysis();
+        }
+
+        function updateStats(data) {
+            const total = data.length;
+            if (total === 0) return;
+
+            Object.keys(multipleDefinitions).forEach(type => {
+                const sum = data.reduce((acc, curr) => acc + curr.counts[type], 0);
+                const avg = (sum / total).toFixed(1);
+                document.getElementById(`stat_${type}`).textContent = avg + '개';
+            });
+        }
+
+        function renderDrawsList(draws) {
+            const container = document.getElementById('drawsList');
+            container.innerHTML = '';
+            document.getElementById('displayedCount').textContent = draws.length;
+
+            draws.forEach((draw, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors';
+                tr.onclick = () => highlightRows(index);
+
+                // 당첨번호 공 생성
+                const ballsHtml = draw.numbers.map(num => {
+                    let className = 'ball-normal';
+                    let style = '';
+                    
+                    // 배수가 선택되어 있고, 해당 번호가 그 배수에 포함되면 색상 적용
+                    if (selectedGraphType && multipleDefinitions[selectedGraphType].includes(num)) {
+                        className = 'ball-custom';
+                        style = `background-color: ${multipleColors[selectedGraphType]}; border-color: ${multipleColors[selectedGraphType]};`;
+                    }
+                    
+                    return `<span class="w-8 h-8 flex items-center justify-center rounded-full ${className} text-xs mx-0.5" style="${style}">${String(num).padStart(2, '0')}</span>`;
+                }).join('');
+
+                // 배수 카운트 열 생성
+                let countsHtml = '';
+                Object.keys(multipleDefinitions).forEach(type => {
+                    const count = draw.counts[type];
+                    let badgeClass = 'bg-gray-100 text-gray-600'; // 0개 (검정/회색)
+                    
+                    if (count === 1) badgeClass = 'bg-pink-100 text-pink-700';
+                    else if (count === 2) badgeClass = 'bg-green-100 text-green-700';
+                    else if (count === 3) badgeClass = 'bg-blue-100 text-blue-700';
+                    else if (count === 4) badgeClass = 'bg-orange-100 text-orange-700';
+                    else if (count >= 5) badgeClass = 'bg-purple-100 text-purple-700';
+                    
+                    countsHtml += `<td class="py-3 px-2 text-center"><span class="count-badge ${badgeClass}">${count}</span></td>`;
+                });
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-center text-sm font-bold text-gray-900 sticky left-0 bg-inherit">${draw.round}회</td>
+                    <td class="py-3 px-4 text-center sticky bg-inherit" style="left: 80px;"><div class="flex items-center justify-center">${ballsHtml}</div></td>
+                    ${countsHtml}
+                `;
+                container.appendChild(tr);
+            });
+        }
+
+        function highlightRows(startIndex) {
+            document.querySelectorAll('.row-highlight').forEach(el => el.classList.remove('row-highlight'));
+            const rows = document.querySelectorAll('#drawsList > tr');
+            for(let i = 0; i < 11; i++) {
+                if (startIndex + i < rows.length) {
+                    rows[startIndex + i].classList.add('row-highlight');
+                }
+            }
+        }
+
+        // --- 차트 ---
+
+        function setChartTab(tab) {
+            chartTab = tab;
+            const btnRate = document.getElementById('tabRate');
+            const btnTrend = document.getElementById('tabTrend');
+            
+            if (tab === 'rate') {
+                btnRate.className = 'px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg transition-colors';
+                btnTrend.className = 'px-4 py-2 text-sm font-medium bg-gray-200 text-gray-700 rounded-lg transition-colors';
+                document.getElementById('rateChartContainer').classList.remove('hidden');
+                document.getElementById('rateChartContainer').classList.add('flex');
+                document.getElementById('trendChartContainer').classList.add('hidden');
+            } else {
+                btnRate.className = 'px-4 py-2 text-sm font-medium bg-gray-200 text-gray-700 rounded-lg transition-colors';
+                btnTrend.className = 'px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg transition-colors';
+                document.getElementById('rateChartContainer').classList.add('hidden');
+                document.getElementById('rateChartContainer').classList.remove('flex');
+                document.getElementById('trendChartContainer').classList.remove('hidden');
+                updateTrendChart();
+            }
+        }
+
+        function changeGraphType(type) {
+            // 드롭다운 변경 시에도 선택 상태 업데이트
+            if (selectedGraphType !== type) {
+                selectedGraphType = type;
+                updateStatCardStyles(); // 통계 카드 하이라이트 동기화
+                
+                const displayData = allDrawData.slice(0, currentRange);
+                renderDrawsList(displayData);
+                updateCharts(displayData);
+                refreshAIAnalysis();
+            }
+        }
+
+        function updateCharts(data) {
+            updateRateChart(data);
+            if (chartTab === 'trend') updateTrendChart();
+        }
+
+        function updateRateChart(data) {
+            const total = data.length;
+            const graphTarget = selectedGraphType || '3배수'; // 선택 안되어 있으면 그래프는 3배수 보여줌 (혹은 빈 상태)
+            
+            const counts = [0,0,0,0,0,0,0];
+            data.forEach(d => {
+                const val = d.counts[graphTarget];
+                if (val !== undefined && val <= 6) counts[val]++;
+            });
+            
+            const maxPct = Math.max(...counts.map(c => c / total * 100));
+            const barColor = multipleColors[graphTarget] || '#3B82F6';
+            
+            let html = '';
+            for (let i = 0; i <= 6; i++) {
+                const pct = (counts[i] / total * 100).toFixed(1);
+                const height = maxPct > 0 ? (counts[i] / total * 100 / maxPct * 85) : 0; 
+                
+                html += `<div class="flex flex-col items-center flex-1 h-full justify-end group">
+                    <div class="flex-1 w-full px-1 sm:px-2 flex flex-col items-center justify-end">
+                        <span class="text-xs font-bold text-gray-600 mb-1 group-hover:scale-110 transition-transform">${pct}%</span>
+                        <div class="w-full max-w-[40px] rounded-t-lg transition-all duration-500 relative group-hover:opacity-80" style="height: ${Math.max(height, 2)}%; background-color: ${barColor}"></div>
+                    </div>
+                    <span class="text-xs text-gray-500 mt-2 font-medium">${i}개</span>
+                </div>`;
+            }
+            document.getElementById('rateChartContainer').innerHTML = html;
+        }
+
+        function updateTrendChart() {
+            const data = allDrawData.slice(0, currentRange).reverse();
+            const labels = data.map(d => d.round + '회');
+            const graphTarget = selectedGraphType || '3배수';
+            const values = data.map(d => d.counts[graphTarget]);
+            const color = multipleColors[graphTarget] || '#3B82F6';
+
+            if (trendChartInstance) trendChartInstance.destroy();
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            
+            trendChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: graphTarget,
+                        data: values,
+                        borderColor: color,
+                        backgroundColor: color + '20', 
+                        borderWidth: 2,
+                        tension: 0.3,
+                        pointRadius: 2,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            max: 6, 
+                            ticks: { stepSize: 1 },
+                            grid: { display: false } 
+                        },
+                        x: { 
+                            display: true, 
+                            ticks: { maxTicksLimit: 10 },
+                            grid: { display: false } 
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- 공통 유틸리티 ---
+        function updateSliderBackground(value) {
+            const total = allDrawData.length || 1203;
+            const slider = document.getElementById('rangeSlider');
+            if (slider) {
+                const percent = ((value - 10) / (total - 10)) * 100;
+                slider.style.setProperty('--value-percent', percent + '%');
+            }
+        }
+
+        function setRange(value) {
+            const maxVal = allDrawData.length || 1203;
+            const safeValue = value > maxVal ? maxVal : value;
+            document.getElementById('rangeSlider').value = safeValue;
+            updateRange(safeValue);
+        }
+
+        function updatePresetButtons(value) {
+            const maxVal = allDrawData.length;
+            const buttons = { 50: 'preset50', 100: 'preset100', 500: 'preset500', 1203: 'preset1203' };
+            Object.keys(buttons).forEach(key => {
+                const btn = document.getElementById(buttons[key]);
+                const targetValue = key === '1203' ? maxVal : parseInt(key);
+                if (targetValue === value) btn.className = 'px-3 py-1.5 text-sm font-medium bg-blue-500 text-white rounded-lg transition-colors';
+                else btn.className = 'px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors';
+            });
+        }
+
+        function applyFilter() {
+            console.log("필터 적용 (조합기 연동 준비)");
+        }
+
+        // --- AI ---
+        function formatAIResponse(text) {
+            if (!text) return "";
+            return text
+                .replace(/{{number:(.*?)}}/g, '<span class="text-red-600 bg-red-50 font-bold px-1 rounded">$1</span>')
+                .replace(/{{up:(.*?)}}/g, '<span class="text-green-600 bg-green-50 font-bold px-1 rounded">$1</span>')
+                .replace(/{{down:(.*?)}}/g, '<span class="text-orange-600 bg-orange-50 font-bold px-1 rounded">$1</span>')
+                .replace(/{{warn:(.*?)}}/g, '<span class="text-yellow-600 bg-yellow-50 font-bold px-1 rounded">$1</span>')
+                .replace(/{{good:(.*?)}}/g, '<span class="text-blue-600 bg-blue-50 font-bold px-1 rounded">$1</span>')
+                .replace(/{{range:(.*?)}}/g, '<span class="text-purple-600 bg-purple-50 font-bold px-1 rounded">$1</span>');
+        }
+
+        async function refreshAIAnalysis() {
+            const aiContent = document.getElementById('aiAnalysisContent');
+            aiContent.innerHTML = `<div class="flex items-center gap-2 text-gray-500"><span class="material-symbols-outlined text-lg animate-spin">progress_activity</span><span>AI가 데이터를 심층 분석 중입니다...</span></div>`;
+            
+            // 배수가 선택되지 않았으면 '배수 전체'로 전송, 선택되었으면 해당 배수 이름 전송
+            const targetType = selectedGraphType || '배수 전체';
+            const displayTitle = selectedGraphType ? selectedGraphType : '배수 종합';
+            document.getElementById('aiTitleTarget').textContent = displayTitle;
+
+            const data = allDrawData.slice(0, currentRange);
+            // 요약 데이터 생성 (선택된 배수 또는 전체 요약)
+            let recentDraws = "";
+            if (selectedGraphType) {
+                recentDraws = data.slice(0, 10).map(d => `${d.round}회(${selectedGraphType}:${d.counts[selectedGraphType]})`).join(', ');
+            } else {
+                recentDraws = "종합 분석 요청"; 
+            }
+            
+            try {
+                const { data: analysis, error } = await supabaseClient.functions.invoke('analyze-lotto', {
+                    body: { currentRange, recentDraws, type: targetType }
+                });
+                if (error) throw error;
+                
+                aiContent.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-3"><span class="material-symbols-outlined text-purple-600 text-2xl mt-1">trending_up</span><div class="flex-1"><h4 class="font-bold text-gray-900 mb-1">패턴분석</h4><p class="text-sm text-gray-700 leading-relaxed">${formatAIResponse(analysis.trend)}</p></div></div>
+                        <div class="flex items-start gap-3"><span class="material-symbols-outlined text-green-600 text-2xl mt-1">insights</span><div class="flex-1"><h4 class="font-bold text-gray-900 mb-1">최근추세</h4><p class="text-sm text-gray-700 leading-relaxed">${formatAIResponse(analysis.pattern)}</p></div></div>
+                        <div class="flex items-start gap-3"><span class="material-symbols-outlined text-blue-600 text-2xl mt-1">lightbulb</span><div class="flex-1"><h4 class="font-bold text-gray-900 mb-1">통계적 특징</h4><p class="text-sm text-gray-700 leading-relaxed">${formatAIResponse(analysis.recommendation)}</p></div></div>
+                    </div>`;
+            } catch (err) {
+                console.error("AI 분석 실패:", err);
+                const errorMsg = err.message || "알 수 없는 오류";
+                aiContent.innerHTML = `<div class="text-red-500 flex items-center gap-2"><span class="material-symbols-outlined">error</span><div><p class="font-bold">분석에 실패했습니다.</p><p class="text-xs text-gray-400">(${errorMsg})</p></div></div>`;
+            }
+        }
+    </script>
+</body>
+</html>

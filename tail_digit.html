@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html class="light" lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Lotto Lab - 끝수합 (Supabase AI)</title>
+    <link as="style" crossorigin="" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script src="js/layout.js"></script>
+
+    <script>
+        // ✅ Supabase 설정
+        const SUPABASE_URL = 'https://dkcflmyoscudawleglzb.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrY2ZsbXlvc2N1ZGF3bGVnbHpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1NDQ4OTAsImV4cCI6MjA4MzEyMDg5MH0.haAvbpScvMJv1uqH_tk-0fUlJNCpHnlWBtYzX6YFweo';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let allDrawData = []; 
+        let sumChart = null;
+        let chartMode = 'distribution'; 
+        let currentRange = 100;
+        
+        // 🔹 드래그 상태 관리 변수
+        let isDragging = false;
+        let dragTarget = null; // 'min' or 'max'
+
+        // ✅ 조합수 계산 (DP) - 초기화 즉시 실행
+        const theoreticalCombinations = {};
+        (function() {
+            // dp[count][sum]: count개의 공을 뽑았을 때 끝수합이 sum이 되는 경우의 수
+            // 최대 합: 9 * 6 = 54
+            const dp = Array(7).fill(0).map(() => Array(60).fill(0));
+            dp[0][0] = 1;
+
+            // 1~45번 공 순회
+            for (let i = 1; i <= 45; i++) {
+                const digit = i % 10;
+                // 공을 하나씩 추가 (중복 방지 위해 역순 순회)
+                for (let c = 6; c >= 1; c--) {
+                    for (let s = 54; s >= digit; s--) {
+                        dp[c][s] += dp[c - 1][s - digit];
+                    }
+                }
+            }
+            // 결과 저장 (6개 뽑았을 때)
+            for (let s = 0; s <= 54; s++) {
+                if (dp[6][s] > 0) theoreticalCombinations[s] = dp[6][s];
+            }
+        })();
+
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: { colors: { "active-green": "#E6FFED", "active-text": "#16A34A", "lotto-blue": "#3B82F6" }, fontFamily: { "sans": ["Pretendard", "Inter", "sans-serif"] } },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .material-symbols-outlined.filled { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .ball-gray { background: #FFFFFF; color: #1F2937; border: 1px solid #D1D5DB; box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-family: 'Pretendard', sans-serif; font-weight: 600; }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; background: #E5E7EB; outline: none; cursor: pointer;
+            background-image: linear-gradient(#3B82F6, #3B82F6); background-size: var(--value-percent, 0%) 100%; background-repeat: no-repeat;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #3B82F6; cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.1s; border: 2px solid white;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.1); background: #2563EB; }
+        input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #3B82F6; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border: 2px solid white; }
+        .ai-section { background: linear-gradient(135deg, #E0E7FF 0%, #EDE9FE 50%, #FCE7F3 100%); }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-[#F9FAFB] font-sans antialiased">
+    <div class="flex flex-col h-screen w-full">
+        
+        <div id="gnb-container"></div>
+
+        <div class="flex flex-1 overflow-hidden">
+            <aside class="w-56 bg-white border-r border-gray-200 overflow-y-auto custom-scrollbar flex-shrink-0" id="lnb-container">
+            </aside>
+
+            <main class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <div class="max-w-7xl mx-auto space-y-6">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 mb-1">끝수합</h1>
+                        <p class="text-sm text-gray-600">당첨번호 6개 각각의 일의 자리 합계를 분석합니다. (최소값 <span id="minSumValue" class="font-semibold text-blue-600">-</span>에서 최대값 <span id="maxSumValue" class="font-semibold text-blue-600">-</span>까지 있습니다.)</p>
+                    </div>
+
+                    <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <div id="card-avg" onclick="toggleStatCard('avg', 'blue')" class="cursor-pointer bg-white rounded-xl p-4 border border-gray-200 relative overflow-hidden group hover:shadow-md transition-all">
+                                <div class="flex flex-col h-full justify-between relative z-10">
+                                    <div class="flex items-center gap-2 mb-2"><div class="bg-white p-1.5 rounded-lg shadow-sm"><span id="icon-avg" class="material-symbols-outlined text-gray-400 text-xl">analytics</span></div><span id="title-avg" class="text-sm font-semibold text-gray-500">평균 끝수합</span></div>
+                                    <div class="flex items-end gap-1"><span id="val-avg" class="text-2xl font-bold text-gray-900">-</span><span id="label-avg" class="text-xs text-gray-400 mb-1 font-medium">Mean</span></div>
+                                </div>
+                                <div id="deco-avg" class="absolute -right-4 -bottom-4 w-24 h-24 bg-gray-100 rounded-full opacity-50 group-hover:scale-110 transition-transform"></div>
+                            </div>
+                            <div id="card-max" onclick="toggleStatCard('max', 'red')" class="cursor-pointer bg-white rounded-xl p-4 border border-gray-200 relative overflow-hidden group hover:shadow-md transition-all">
+                                <div class="flex flex-col h-full justify-between relative z-10">
+                                    <div class="flex items-center gap-2 mb-2"><div class="bg-white p-1.5 rounded-lg shadow-sm"><span id="icon-max" class="material-symbols-outlined text-gray-400 text-xl">trending_up</span></div><span id="title-max" class="text-sm font-semibold text-gray-500">최대 끝수합</span></div>
+                                    <div class="flex items-end gap-1"><span id="val-max" class="text-2xl font-bold text-gray-900">-</span><span id="label-max" class="text-xs text-gray-400 mb-1 font-medium">Max</span></div>
+                                </div>
+                                <div id="deco-max" class="absolute -right-4 -bottom-4 w-24 h-24 bg-gray-100 rounded-full opacity-50 group-hover:scale-110 transition-transform"></div>
+                            </div>
+                            <div id="card-min" onclick="toggleStatCard('min', 'green')" class="cursor-pointer bg-white rounded-xl p-4 border border-gray-200 relative overflow-hidden group hover:shadow-md transition-all">
+                                <div class="flex flex-col h-full justify-between relative z-10">
+                                    <div class="flex items-center gap-2 mb-2"><div class="bg-white p-1.5 rounded-lg shadow-sm"><span id="icon-min" class="material-symbols-outlined text-gray-400 text-xl">trending_down</span></div><span id="title-min" class="text-sm font-semibold text-gray-500">최소 끝수합</span></div>
+                                    <div class="flex items-end gap-1"><span id="val-min" class="text-2xl font-bold text-gray-900">-</span><span id="label-min" class="text-xs text-gray-400 mb-1 font-medium">Min</span></div>
+                                </div>
+                                <div id="deco-min" class="absolute -right-4 -bottom-4 w-24 h-24 bg-gray-100 rounded-full opacity-50 group-hover:scale-110 transition-transform"></div>
+                            </div>
+                            <div id="card-trend" onclick="toggleStatCard('trend', 'purple')" class="cursor-pointer bg-white rounded-xl p-4 border border-gray-200 relative overflow-hidden group hover:shadow-md transition-all">
+                                <div class="flex flex-col h-full justify-between relative z-10">
+                                    <div class="flex items-center gap-2 mb-2"><div class="bg-white p-1.5 rounded-lg shadow-sm"><span id="icon-trend" class="material-symbols-outlined text-gray-400 text-xl">update</span></div><span id="title-trend" class="text-sm font-semibold text-gray-500">최근 추세</span></div>
+                                    <div class="flex items-end gap-1"><span id="val-trend" class="text-2xl font-bold text-gray-900">-</span><span id="label-trend" class="text-xs text-gray-400 mb-1 font-medium">Trend</span></div>
+                                </div>
+                                <div id="deco-trend" class="absolute -right-4 -bottom-4 w-24 h-24 bg-gray-100 rounded-full opacity-50 group-hover:scale-110 transition-transform"></div>
+                            </div>
+                        </div>
+
+                        <div class="ai-section rounded-2xl p-6 mb-6">
+                            <div class="flex items-center justify-between mb-5">
+                                <div class="flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-purple-600">psychology</span>
+                                    <h3 class="text-lg font-bold text-gray-900">AI 분석</h3>
+                                </div>
+                                <button onclick="refreshAIAnalysis()" class="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+                                    <span class="material-symbols-outlined text-lg">refresh</span>분석 새로고침
+                                </button>
+                            </div>
+                            <div id="aiAnalysisContent" class="text-sm text-gray-700 leading-relaxed text-left">
+                                <div class="flex items-center gap-2 text-gray-500">
+                                    <span class="material-symbols-outlined text-lg animate-spin">progress_activity</span>
+                                    <span>AI가 데이터를 분석하고 있습니다...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-bold text-gray-900">그래프</h3>
+                                <div class="flex gap-2">
+                                    <button id="chartTypeDistribution" onclick="changeChartMode('distribution')" class="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg transition-colors">분포기준</button>
+                                    <button id="chartTypeRound" onclick="changeChartMode('round')" class="px-4 py-2 text-sm font-medium bg-gray-200 text-gray-700 rounded-lg transition-colors">회차기준</button>
+                                </div>
+                            </div>
+                            <div class="h-80"><canvas id="sumChart"></canvas></div>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-bold text-gray-900">분석 회차 범위</h3>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="setRange(50)" id="preset50" class="px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">50회</button>
+                                    <button onclick="setRange(100)" id="preset100" class="px-3 py-1.5 text-sm font-medium bg-blue-500 text-white rounded-lg transition-colors">100회</button>
+                                    <button onclick="setRange(500)" id="preset500" class="px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">500회</button>
+                                    <button onclick="setRange(1203)" id="preset1203" class="px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">전체</button>
+                                </div>
+                            </div>
+                            <div class="space-y-3">
+                                <input type="range" id="rangeSlider" min="10" max="1203" value="100" oninput="updateRange(this.value)"/>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-gray-600">최근 <span id="rangeDisplay" class="font-bold text-blue-600">100</span>회 분석</span>
+                                    <span class="text-gray-500">최대 1,203회</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-bold text-gray-900">필터</h3>
+                            <a href="#filter-page" class="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"><span class="material-symbols-outlined text-sm">open_in_new</span>필터 페이지 가기</a>
+                        </div>
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-6 justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="flex flex-col"><span class="text-xs text-gray-500 mb-1 ml-1">최소</span><input type="number" id="minFilter" placeholder="0" onchange="applyFilter()" class="w-72 px-3 py-2 text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold"/></div>
+                                <span class="text-gray-400 mt-4">~</span>
+                                <div class="flex flex-col"><span class="text-xs text-gray-500 mb-1 ml-1">최대</span><input type="number" id="maxFilter" placeholder="0" onchange="applyFilter()" class="w-72 px-3 py-2 text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold"/></div>
+                            </div>
+                            <div class="h-8 w-px bg-gray-200 hidden sm:block"></div>
+                            <div class="flex items-center gap-3 ml-auto">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="applyFilter" onchange="applyFilter()" class="sr-only peer" checked>
+                                    <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                                </label>
+                                <label for="applyFilter" class="text-sm font-medium text-gray-700 cursor-pointer">필터 적용 (조합기 연동)</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                            <div><h3 class="text-lg font-bold text-gray-900 mb-1">회차별 당첨번호 및 끝수합</h3><p class="text-sm text-gray-600">최근 <span id="displayedCount">100</span>회차 표시</p></div>
+                            <button onclick="openStatsModal()" class="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"><span class="material-symbols-outlined text-lg">bar_chart</span>통계 보기</button>
+                        </div>
+                        <div class="px-6 py-3 bg-gray-50 border-b border-gray-200">
+                            <div class="flex items-center gap-4"><span class="text-xs font-semibold text-gray-600 uppercase w-16 text-center">회차</span><span class="text-xs font-semibold text-gray-600 uppercase flex-1 text-center">당첨번호</span><span class="text-xs font-semibold text-gray-600 uppercase w-20 text-center">끝수합</span><span class="text-xs font-semibold text-gray-600 uppercase w-16 text-center">증감</span><span class="text-xs font-semibold text-gray-600 uppercase w-16 text-center">추세</span></div>
+                        </div>
+                        <div id="drawsList" class="max-h-[600px] overflow-y-auto custom-scrollbar p-6 pt-0">
+                            <div class="flex items-center justify-center p-10 text-gray-500"><span class="material-symbols-outlined animate-spin mr-2">progress_activity</span>데이터를 불러오는 중...</div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="statsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center justify-between mb-4">
+                    <div><h2 class="text-xl font-bold text-gray-900">끝수합 통계</h2><p class="text-sm text-gray-600 mt-1">끝수합별 출현 빈도</p></div>
+                    <button onclick="closeStatsModal()" class="p-2 hover:bg-gray-100 rounded-lg transition-colors"><span class="material-symbols-outlined text-gray-500">close</span></button>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-sm font-medium text-gray-700">분석 범위</span>
+                        <div class="flex gap-2">
+                            <button onclick="setStatsRange(100)" class="px-3 py-1 text-xs font-medium bg-white hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">100회</button>
+                            <button onclick="setStatsRange(500)" class="px-3 py-1 text-xs font-medium bg-white hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">500회</button>
+                            <button onclick="setStatsRange(1203)" class="px-3 py-1 text-xs font-medium bg-white hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">전체</button>
+                        </div>
+                    </div>
+                    <input type="range" id="statsRangeSlider" min="10" max="1203" value="100" oninput="updateStatsRange(this.value)"/>
+                    <div class="mt-2 text-sm text-gray-600">최근 <span id="statsRangeDisplay" class="font-bold text-gray-900">100</span>회 분석</div>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                <table class="w-full">
+                    <thead class="sticky top-0 bg-gray-100 border-b border-gray-200">
+                        <tr>
+                            <th class="py-3 px-4 text-center text-xs font-semibold text-gray-600 uppercase w-16">필터</th>
+                            <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase">끝수합</th>
+                            <th class="py-3 px-4 text-center text-xs font-semibold text-gray-600 uppercase">조합수</th>
+                            <th class="py-3 px-4 text-center text-xs font-semibold text-gray-600 uppercase">조합수비중</th>
+                            <th class="py-3 px-4 text-center text-xs font-semibold text-gray-600 uppercase">출현횟수</th>
+                            <th class="py-3 px-4 text-center text-xs font-semibold text-gray-600 uppercase">출현비중</th>
+                            <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase w-32">그래프</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsTableBody" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+            <div class="p-6 border-t border-gray-200 flex items-center justify-end gap-3 bg-gray-50">
+                <button onclick="closeStatsModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const minMaxLabelsPlugin = {
+            id: 'minMaxLabels',
+            afterDatasetsDraw: function(chart) {
+                // ✅ 플러그인에서 라인 그리기 (필터 Min/Max)
+                const ctx = chart.ctx;
+                const xAxis = chart.scales.x;
+                const yAxis = chart.scales.y;
+
+                // 1. 현재 필터값 (파란색: Min, 빨간색: Max) 그리기
+                const minInput = document.getElementById('minFilter');
+                const maxInput = document.getElementById('maxFilter');
+                
+                const minVal = minInput && minInput.value ? parseInt(minInput.value) : null;
+                const maxVal = maxInput && maxInput.value ? parseInt(maxInput.value) : null;
+
+                const isDistribution = (chartMode === 'distribution');
+
+                // 함수: 선 그리기 (값, 색상, 텍스트)
+                const drawLine = (val, color, labelText) => {
+                    if (isDistribution) {
+                        if (val < xAxis.min || val > xAxis.max) return;
+                    } else {
+                        if (val < yAxis.min || val > yAxis.max) return;
+                    }
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.lineWidth = 1; // 💡 얇은 선
+                    ctx.strokeStyle = color;
+                    ctx.setLineDash([5, 3]);
+
+                    let xPos, yPos;
+
+                    if (isDistribution) {
+                        // 분포기준: X축이 끝수합 -> 세로선 그리기
+                        xPos = xAxis.getPixelForValue(val);
+                        if (xPos === undefined || isNaN(xPos)) return; 
+
+                        ctx.moveTo(xPos, yAxis.top);
+                        ctx.lineTo(xPos, yAxis.bottom);
+                        ctx.stroke();
+
+                        ctx.fillStyle = color;
+                        ctx.font = 'bold 11px Pretendard';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(labelText || val, xPos, yAxis.top - 5);
+                    } else {
+                        // 회차기준: Y축이 끝수합 -> 가로선 그리기
+                        yPos = yAxis.getPixelForValue(val);
+                        if (yPos === undefined || isNaN(yPos)) return;
+
+                        ctx.moveTo(xAxis.left, yPos);
+                        ctx.lineTo(xAxis.right, yPos);
+                        ctx.stroke();
+
+                        ctx.fillStyle = color;
+                        ctx.font = 'bold 11px Pretendard';
+                        ctx.textAlign = 'right';
+                        ctx.fillText(labelText || val, xAxis.right - 5, yPos - 5);
+                    }
+                    ctx.restore();
+                };
+
+                // 필터선 그리기 (값이 있고, 기본값(null)이 아닐 때)
+                if (minVal !== null) { 
+                    drawLine(minVal, 'rgba(37, 99, 235, 0.8)', `Min:${minVal}`); 
+                }
+                
+                if (maxVal !== null) {
+                    drawLine(maxVal, 'rgba(220, 38, 38, 0.8)', `Max:${maxVal}`); 
+                }
+
+                // (기존 라벨 로직 - Max/Min 포인트 표시 - 회차기준일때만)
+                if (chartMode === 'round') {
+                    const dataset = chart.data.datasets[0];
+                    const meta = chart.getDatasetMeta(0);
+                    if (!dataset.data || dataset.data.length === 0) return;
+                    const maxValue = Math.max(...dataset.data);
+                    const minValue = Math.min(...dataset.data);
+                    const maxIndex = dataset.data.indexOf(maxValue);
+                    const minIndex = dataset.data.indexOf(minValue);
+                    ctx.save();
+                    ctx.font = 'bold 12px Pretendard, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    if (meta.data[maxIndex]) {
+                        const point = meta.data[maxIndex];
+                        ctx.fillStyle = 'rgba(239, 68, 68, 1)';
+                        ctx.fillText(maxValue, point.x, point.y - 15);
+                    }
+                    if (meta.data[minIndex]) {
+                        const point = meta.data[minIndex];
+                        ctx.fillStyle = 'navy'; // 텍스트도 네이비로 맞춤 (선택사항) 또는 기존 유지
+                        ctx.fillText(minValue, point.x, point.y + 15);
+                    }
+                    ctx.restore();
+                }
+            }
+        };
+
+        function toggleStatCard(type, color) {
+            const card = document.getElementById(`card-${type}`);
+            const icon = document.getElementById(`icon-${type}`);
+            const title = document.getElementById(`title-${type}`);
+            const val = document.getElementById(`val-${type}`);
+            const label = document.getElementById(`label-${type}`);
+            const deco = document.getElementById(`deco-${type}`);
+            const isActive = !card.classList.contains('bg-white');
+            if (isActive) {
+                card.classList.add('bg-white', 'border-gray-200');
+                card.classList.remove(`bg-${color}-50`, `border-${color}-100`);
+                icon.classList.remove(`text-${color}-600`); icon.classList.add('text-gray-400');
+                title.classList.remove(`text-${color}-900`); title.classList.add('text-gray-500');
+                val.classList.remove(`text-${color}-900`); val.classList.add('text-gray-900');
+                label.classList.remove(`text-${color}-700`); label.classList.add('text-gray-400');
+                deco.classList.remove(`bg-${color}-100`); deco.classList.add('bg-gray-100');
+            } else {
+                card.classList.remove('bg-white', 'border-gray-200');
+                card.classList.add(`bg-${color}-50`, `border-${color}-100`);
+                icon.classList.remove('text-gray-400'); icon.classList.add(`text-${color}-600`);
+                title.classList.remove('text-gray-500'); title.classList.add(`text-${color}-900`);
+                val.classList.remove('text-gray-900'); val.classList.add(`text-${color}-900`);
+                label.classList.remove('text-gray-400'); label.classList.add(`text-${color}-700`);
+                deco.classList.remove('bg-gray-100'); deco.classList.add(`bg-${color}-100`);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                const { data, error } = await supabaseClient
+                .from('lotto_draws') 
+                .select('*')
+                .order('round', { ascending: false });
+
+                if (error) throw error;
+                if (!data || data.length === 0) {
+                    console.warn("데이터가 비어있습니다. Supabase 테이블을 확인하세요.");
+                    document.getElementById('drawsList').innerHTML = '<div class="p-10 text-center text-gray-500">데이터가 없습니다.</div>';
+                    return;
+                }
+
+                allDrawData = data.map(item => ({
+                    ...item,
+                    sum: item.numbers ? item.numbers.reduce((a,b) => a + (b % 10), 0) : 0
+                }));
+                
+                const allSums = allDrawData.map(d => d.sum);
+                const minSum = Math.min(...allSums);
+                const maxSum = Math.max(...allSums);
+                
+                document.getElementById('minSumValue').textContent = minSum;
+                document.getElementById('maxSumValue').textContent = maxSum;
+                
+                loadDrawData();
+                initChart(); // 차트 생성
+                updateStatistics(currentRange);
+                
+                const initialDraws = allDrawData.slice(0, currentRange);
+                renderDrawsList(initialDraws);
+                
+                const totalCount = allDrawData.length;
+                const rangeSlider = document.getElementById('rangeSlider');
+                const statsRangeSlider = document.getElementById('statsRangeSlider');
+                rangeSlider.max = totalCount;
+                statsRangeSlider.max = totalCount;
+                document.getElementById('preset1203').setAttribute('onclick', `setRange(${totalCount})`);
+                document.getElementById('preset1203').innerText = "전체";
+                
+                setTimeout(() => {
+                    const slider = document.getElementById('rangeSlider');
+                    if (slider) updateSliderBackground(slider.value);
+                }, 0);
+                
+            } catch (err) {
+                console.error('데이터 로드 실패:', err);
+                document.getElementById('drawsList').innerHTML = `<div class="p-10 text-center text-red-500">데이터 로드 실패<br>${err.message}</div>`;
+            }
+        });
+        
+        function loadDrawData() {}
+        
+        function updateSliderBackground(value) {
+            const slider = document.getElementById('rangeSlider');
+            if (!slider) return;
+            const min = parseInt(slider.min) || 10;
+            const max = parseInt(slider.max) || 1203;
+            const val = parseInt(value);
+            const percentage = ((val - min) / (max - min)) * 100;
+            slider.style.setProperty('--value-percent', percentage + '%');
+        }
+        
+        function updateStatistics(range) {
+            if (!allDrawData.length) return;
+            const data = allDrawData.slice(0, range);
+            const sums = data.map(d => d.sum);
+            
+            const avg = (sums.reduce((a, b) => a + b, 0) / sums.length).toFixed(1);
+            const min = Math.min(...sums);
+            const max = Math.max(...sums);
+            
+            document.getElementById('val-avg').textContent = avg;
+            document.getElementById('val-min').textContent = min;
+            document.getElementById('val-max').textContent = max;
+
+            const recentCount = 5;
+            const recentSums = sums.slice(0, recentCount);
+            const recentAvg = recentSums.length ? (recentSums.reduce((a, b) => a + b, 0) / recentSums.length) : 0;
+            const overallAvg = parseFloat(avg);
+            
+            let trend = "보통";
+            if (recentAvg > overallAvg + 3) trend = "상승세";
+            else if (recentAvg < overallAvg - 3) trend = "하락세";
+            
+            const trendEl = document.getElementById('val-trend');
+            if(trendEl) trendEl.textContent = trend;
+            
+            document.getElementById('minFilter').value = min;
+            document.getElementById('maxFilter').value = max;
+            document.getElementById('minFilter').min = min;
+            document.getElementById('minFilter').max = max;
+            document.getElementById('maxFilter').min = min;
+            document.getElementById('maxFilter').max = max;
+        }
+        
+        function renderDrawsList(draws) {
+            const container = document.getElementById('drawsList');
+            container.innerHTML = '';
+            
+            if (draws.length === 0) {
+                container.innerHTML = '<div class="p-4 text-center text-gray-500">표시할 데이터가 없습니다.</div>';
+                return;
+            }
+
+            const sums = draws.map(d => d.sum);
+            const avgValue = sums.reduce((a, b) => a + b, 0) / sums.length;
+            
+            const trendData = [];
+            let prevChangeSymbol = '';
+            let trendCount = 0;
+            
+            for (let i = draws.length - 1; i >= 0; i--) {
+                let changeSymbol = '';
+                let trendValue = '';
+                
+                if (i < draws.length - 1) {
+                    const currentSum = draws[i].sum;
+                    const prevSum = draws[i + 1].sum;
+                    
+                    if (currentSum > prevSum) changeSymbol = '↑';
+                    else if (currentSum < prevSum) changeSymbol = '↓';
+                    else changeSymbol = '-';
+                    
+                    if (changeSymbol === prevChangeSymbol) trendCount++;
+                    else {
+                        trendCount = 1;
+                        prevChangeSymbol = changeSymbol;
+                    }
+                    trendValue = trendCount;
+                }
+                trendData[i] = { changeSymbol, trendValue };
+            }
+            
+            draws.forEach((draw, index) => {
+                const div = document.createElement('div');
+                // ✅ 클릭 이벤트 및 ID 추가
+                div.id = `draw-row-${index}`;
+                div.className = 'flex items-center gap-4 p-4 hover:bg-gray-50 rounded-lg transition-colors border-b border-gray-100 cursor-pointer';
+                div.onclick = () => highlightRows(index);
+                
+                const { changeSymbol, trendValue } = trendData[index];
+                const sumColor = draw.sum >= avgValue ? 'text-red-600' : 'text-blue-600';
+                let arrowColor = 'text-gray-400';
+                if (changeSymbol === '↑') arrowColor = 'text-red-600';
+                if (changeSymbol === '↓') arrowColor = 'text-blue-600';
+                
+                div.innerHTML = `
+                    <span class="text-sm font-bold text-gray-900 w-16 text-center">${draw.round}회</span>
+                    <div class="flex gap-2 flex-1 justify-center items-center">
+                        ${draw.numbers.map(num => `<span class="w-10 h-10 flex items-center justify-center rounded-full ball-gray text-sm">${String(num).padStart(2, '0')}</span>`).join('')}
+                    </div>
+                    <span class="text-lg font-bold ${sumColor} w-20 text-center">${draw.sum}</span>
+                    <span class="text-lg font-bold ${arrowColor} w-16 text-center">${changeSymbol}</span>
+                    <span class="text-sm font-bold text-gray-900 w-16 text-center">${trendValue}</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+        
+        // ✅ 최근 10회 하이라이트 기능 추가
+        function highlightRows(startIndex) {
+            const container = document.getElementById('drawsList');
+            const rows = container.children;
+            
+            // 기존 하이라이트 제거
+            for (let row of rows) {
+                row.style.backgroundColor = '';
+            }
+
+            // 클릭한 행 포함 아래로 10개 하이라이트
+            for (let i = startIndex; i < startIndex + 10; i++) {
+                const row = document.getElementById(`draw-row-${i}`);
+                if (row) {
+                    row.style.backgroundColor = 'lightyellow'; // 옅은 노란
+                }
+            }
+        }
+        
+        function initChart() {
+            const canvas = document.getElementById('sumChart');
+            const ctx = canvas.getContext('2d');
+            const distributionData = generateDistributionData(currentRange);
+            
+            sumChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: distributionData.labels,
+                    datasets: [{
+                        label: '출현 빈도',
+                        data: distributionData.values,
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+                        borderColor: 'rgba(59, 130, 246, 1)', 
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 2,
+                        pointBackgroundColor: 'rgba(59, 130, 246, 1)', 
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 1,
+                        pointHoverRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 13 },
+                            cornerRadius: 8
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { display: false },
+                            title: { display: true, text: '출현 횟수', align: 'end', font: { size: 12, weight: 'bold' } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            title: { display: true, text: '끝수합', align: 'end', font: { size: 12, weight: 'bold' } },
+                            ticks: { maxTicksLimit: 20 }
+                        }
+                    },
+                    // 💡 싱글 클릭 이벤트 제거
+                    onClick: null 
+                },
+                plugins: [minMaxLabelsPlugin]
+            });
+
+            // ✅ 1. 더블 클릭: 선 생성 및 값 설정
+            canvas.addEventListener('dblclick', function(e) {
+                if (!sumChart) return;
+                
+                const canvasPosition = Chart.helpers.getRelativePosition(e, sumChart);
+                let clickedValue;
+                
+                if (chartMode === 'distribution') {
+                    clickedValue = sumChart.scales.x.getValueForPixel(canvasPosition.x);
+                } else {
+                    clickedValue = sumChart.scales.y.getValueForPixel(canvasPosition.y);
+                }
+                clickedValue = Math.round(clickedValue);
+
+                const minInput = document.getElementById('minFilter');
+                const maxInput = document.getElementById('maxFilter');
+
+                let currentMin = minInput.value ? parseInt(minInput.value) : null;
+                let currentMax = maxInput.value ? parseInt(maxInput.value) : null;
+
+                if (currentMin === null && currentMax === null) {
+                    minInput.value = clickedValue;
+                } 
+                else if (currentMin !== null && currentMax === null) {
+                    if (clickedValue >= currentMin) maxInput.value = clickedValue;
+                    else minInput.value = clickedValue;
+                }
+                else {
+                    const distToMin = Math.abs(clickedValue - currentMin);
+                    const distToMax = Math.abs(clickedValue - currentMax);
+
+                    if (distToMin <= distToMax) {
+                        if (clickedValue > currentMax) maxInput.value = clickedValue;
+                        else minInput.value = clickedValue;
+                    } else {
+                        if (clickedValue < currentMin) minInput.value = clickedValue;
+                        else maxInput.value = clickedValue;
+                    }
+                }
+                applyFilter();
+            });
+
+            // ✅ 2. 드래그 기능 구현
+            canvas.addEventListener('mousedown', function(e) {
+                if (!sumChart) return;
+                const canvasPosition = Chart.helpers.getRelativePosition(e, sumChart);
+                
+                let scale = (chartMode === 'distribution') ? sumChart.scales.x : sumChart.scales.y;
+                let mouseValue = scale.getValueForPixel((chartMode === 'distribution') ? canvasPosition.x : canvasPosition.y);
+                
+                const minInput = document.getElementById('minFilter');
+                const maxInput = document.getElementById('maxFilter');
+                
+                if (!minInput.value && !maxInput.value) return; 
+
+                const minVal = parseInt(minInput.value);
+                const maxVal = parseInt(maxInput.value);
+                
+                const minPixel = minInput.value ? scale.getPixelForValue(minVal) : -999;
+                const maxPixel = maxInput.value ? scale.getPixelForValue(maxVal) : -999;
+                
+                const mousePixel = (chartMode === 'distribution') ? canvasPosition.x : canvasPosition.y;
+                const threshold = 10;
+                
+                if (Math.abs(mousePixel - minPixel) < threshold) {
+                    isDragging = true; dragTarget = 'min';
+                    canvas.style.cursor = (chartMode === 'distribution') ? 'ew-resize' : 'ns-resize';
+                } else if (Math.abs(mousePixel - maxPixel) < threshold) {
+                    isDragging = true; dragTarget = 'max';
+                    canvas.style.cursor = (chartMode === 'distribution') ? 'ew-resize' : 'ns-resize';
+                }
+            });
+
+            canvas.addEventListener('mousemove', function(e) {
+                if (!sumChart) return;
+                const canvasPosition = Chart.helpers.getRelativePosition(e, sumChart);
+                let scale = (chartMode === 'distribution') ? sumChart.scales.x : sumChart.scales.y;
+                
+                if (!isDragging) {
+                    // Hover Effect
+                    const minInput = document.getElementById('minFilter');
+                    const maxInput = document.getElementById('maxFilter');
+                    const minVal = parseInt(minInput.value);
+                    const maxVal = parseInt(maxInput.value);
+                    const minPixel = minInput.value ? scale.getPixelForValue(minVal) : -999;
+                    const maxPixel = maxInput.value ? scale.getPixelForValue(maxVal) : -999;
+                    const mousePixel = (chartMode === 'distribution') ? canvasPosition.x : canvasPosition.y;
+                    
+                    if (Math.abs(mousePixel - minPixel) < 10 || Math.abs(mousePixel - maxPixel) < 10) {
+                        canvas.style.cursor = (chartMode === 'distribution') ? 'ew-resize' : 'ns-resize';
+                    } else {
+                        canvas.style.cursor = 'default';
+                    }
+                    return;
+                }
+
+                let newValue = scale.getValueForPixel((chartMode === 'distribution') ? canvasPosition.x : canvasPosition.y);
+                newValue = Math.round(newValue);
+                if (newValue < 0) newValue = 0;
+
+                if (dragTarget === 'min') document.getElementById('minFilter').value = newValue;
+                else if (dragTarget === 'max') document.getElementById('maxFilter').value = newValue;
+                
+                sumChart.update('none'); 
+            });
+
+            canvas.addEventListener('mouseup', function() {
+                if (isDragging) {
+                    isDragging = false; dragTarget = null;
+                    canvas.style.cursor = 'default';
+                    applyFilter();
+                }
+            });
+            
+            canvas.addEventListener('mouseout', function() {
+                if (isDragging) {
+                    isDragging = false; dragTarget = null;
+                    canvas.style.cursor = 'default';
+                    applyFilter();
+                }
+            });
+        }
+        
+        function generateDistributionData(range) {
+            if (!allDrawData.length) return { labels: [], values: [] };
+            const data = allDrawData.slice(0, range);
+            const sumCounts = {};
+            const sums = data.map(d => d.sum);
+            const min = Math.min(...sums);
+            const max = Math.max(...sums);
+            data.forEach(draw => { sumCounts[draw.sum] = (sumCounts[draw.sum] || 0) + 1; });
+            const labels = [];
+            const values = [];
+            for (let i = min; i <= max; i++) {
+                labels.push(i);
+                values.push(sumCounts[i] || 0);
+            }
+            return { labels, values };
+        }
+        
+        function generateRoundData(range) {
+            if (!allDrawData.length) return { labels: [], values: [] };
+            const data = allDrawData.slice(0, range);
+            const labels = data.map(d => d.round).reverse();
+            const values = data.map(d => d.sum).reverse();
+            return { labels, values };
+        }
+        
+        function changeChartMode(mode) {
+            if (!sumChart) return;
+            chartMode = mode;
+            const distBtn = document.getElementById('chartTypeDistribution');
+            const roundBtn = document.getElementById('chartTypeRound');
+            if (mode === 'distribution') {
+                distBtn.className = 'px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg transition-colors';
+                roundBtn.className = 'px-4 py-2 text-sm font-medium bg-gray-200 text-gray-700 rounded-lg transition-colors';
+                const data = generateDistributionData(currentRange);
+                sumChart.data.labels = data.labels;
+                sumChart.data.datasets = [{
+                    label: '출현 빈도',
+                    data: data.values,
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 2,
+                    pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 1,
+                    pointHoverRadius: 4
+                }];
+                sumChart.options.scales.x.title.text = '끝수합';
+                sumChart.options.scales.x.ticks.display = true;
+            } else {
+                distBtn.className = 'px-4 py-2 text-sm font-medium bg-gray-200 text-gray-700 rounded-lg transition-colors';
+                roundBtn.className = 'px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-lg transition-colors';
+                const data = generateRoundData(currentRange);
+                const avgValue = data.values.length ? data.values.reduce((a, b) => a + b, 0) / data.values.length : 0;
+                const maxValue = Math.max(...data.values);
+                const minValue = Math.min(...data.values);
+                const maxIndex = data.values.indexOf(maxValue);
+                const minIndex = data.values.indexOf(minValue);
+                const pointRadii = data.values.map((val, idx) => (idx === maxIndex || idx === minIndex) ? 6 : 2);
+                
+                // ✅ 그래프 최소값 색상 변경: Green -> Navy
+                const pointColors = data.values.map((val, idx) => 
+                    (idx === maxIndex) ? 'rgba(239, 68, 68, 1)' : 
+                    (idx === minIndex) ? 'navy' : // 기존 녹색에서 네이비로 변경
+                    'rgba(59, 130, 246, 1)'
+                );
+                
+                sumChart.data.labels = data.labels;
+                sumChart.data.datasets = [
+                    {
+                        label: '끝수합',
+                        data: data.values,
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: pointRadii,
+                        pointBackgroundColor: pointColors,
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 8
+                    },
+                    {
+                        label: `평균: ${avgValue.toFixed(1)}`,
+                        data: Array(data.values.length).fill(avgValue),
+                        borderColor: 'rgba(107, 114, 128, 0.6)',
+                        borderWidth: 1,
+                        borderDash: [8, 4],
+                        fill: false,
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        tension: 0
+                    }
+                ];
+                sumChart.options.scales.x.title.text = '회차';
+                if (currentRange >= 50) sumChart.options.scales.x.ticks.display = false;
+                else { sumChart.options.scales.x.ticks.display = true; sumChart.options.scales.x.ticks.maxTicksLimit = 20; }
+            }
+            sumChart.update();
+        }
+        
+        function updateRange(value) {
+            currentRange = parseInt(value);
+            document.getElementById('rangeDisplay').textContent = value;
+            document.getElementById('displayedCount').textContent = value;
+            updateSliderBackground(value);
+            updateStatistics(currentRange);
+            updatePresetButtons(currentRange);
+            changeChartMode(chartMode);
+            const draws = allDrawData.slice(0, currentRange);
+            renderDrawsList(draws);
+            refreshAIAnalysis();
+        }
+        
+        function setRange(value) {
+            const maxVal = allDrawData.length || 1203;
+            const safeValue = value > maxVal ? maxVal : value;
+            document.getElementById('rangeSlider').value = safeValue;
+            updateRange(safeValue);
+        }
+        
+        function updatePresetButtons(value) {
+            const maxVal = allDrawData.length || 1203;
+            const presets = [
+                { id: 'preset50', value: 50 },
+                { id: 'preset100', value: 100 },
+                { id: 'preset500', value: 500 },
+                { id: 'preset1203', value: maxVal }
+            ];
+            presets.forEach(preset => {
+                const btn = document.getElementById(preset.id);
+                if (btn) {
+                    if (preset.value === value) btn.className = 'px-3 py-1.5 text-sm font-medium bg-blue-500 text-white rounded-lg transition-colors';
+                    else btn.className = 'px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors';
+                }
+            });
+        }
+        
+        function applyFilter() {}
+        function openStatsModal() { document.getElementById('statsModal').classList.remove('hidden'); document.getElementById('statsRangeSlider').value = currentRange; updateStatsRange(currentRange); }
+        function closeStatsModal() { document.getElementById('statsModal').classList.add('hidden'); }
+        
+        function loadStatsData(statsRange) {
+            const tbody = document.getElementById('statsTableBody');
+            tbody.innerHTML = '';
+            
+            const minFilterInput = document.getElementById('minFilter');
+            const maxFilterInput = document.getElementById('maxFilter');
+            const filterEnabled = document.getElementById('applyFilter').checked;
+            
+            const minFilter = minFilterInput.value ? parseInt(minFilterInput.value) : 0;
+            const maxFilter = maxFilterInput.value ? parseInt(maxFilterInput.value) : 999;
+            
+            const rangeData = allDrawData.slice(0, statsRange);
+            const sumCounts = {};
+            
+            const theoreticalSums = Object.keys(theoreticalCombinations).map(Number).sort((a,b)=>a-b);
+
+            rangeData.forEach(draw => { 
+                if (sumCounts[draw.sum] === undefined) sumCounts[draw.sum] = 0;
+                sumCounts[draw.sum]++; 
+            });
+            
+            const statsData = [];
+            theoreticalSums.forEach(sum => {
+                const appearCount = sumCounts[sum] || 0;
+                const winRatio = statsRange > 0 ? (appearCount / statsRange) * 100 : 0;
+                statsData.push({ sum: sum, winCount: appearCount, winRatio: winRatio });
+            });
+            
+            const sortedByWinRatio = [...statsData].sort((a, b) => b.winCount - a.winCount);
+            const top5Sums = sortedByWinRatio.slice(0, 5).map(d => d.sum);
+            const top1Sum = sortedByWinRatio.length > 0 ? sortedByWinRatio[0].sum : null;
+            const getColorClass = (sum, winRatio) => {
+                if (winRatio === 0) return 'bg-gray-100 text-gray-800';
+                if (sum === top1Sum) return 'bg-pink-100 text-pink-800';
+                if (top5Sums.includes(sum)) return 'bg-yellow-100 text-yellow-800';
+                return 'bg-green-100 text-green-800';
+            };
+            
+            const totalCombinations = 8145060; 
+            const maxWinCount = Math.max(...statsData.map(d => d.winCount)) || 1; 
+
+            statsData.forEach(data => {
+                const isInRange = filterEnabled && data.sum >= minFilter && data.sum <= maxFilter;
+                
+                const theoCount = theoreticalCombinations[data.sum] || 0;
+                const theoRatio = ((theoCount / totalCombinations) * 100).toFixed(2); 
+                
+                const barWidth = (data.winCount / maxWinCount) * 100;
+                // ✅ 통계보기 모델: 필터 선택 시 색상 변경 (bg-blue-600으로 원복)
+                const barColor = isInRange ? 'bg-blue-600' : 'bg-gray-300'; 
+
+                const tr = document.createElement('tr');
+                // ✅ 리스트 마우스 오버 색상 (bg-blue-50으로 원복)
+                tr.className = 'hover:bg-blue-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-center"><input type="checkbox" class="w-4 h-4 text-green-600 rounded focus:ring-green-500" ${isInRange ? 'checked' : ''} onchange="toggleSumFilter(${data.sum}, this.checked)"/></td>
+                    <td class="py-3 px-4 text-left font-bold text-gray-900">${data.sum}</td>
+                    <td class="py-3 px-4 text-center text-gray-700">${theoCount.toLocaleString()}</td>
+                    <td class="py-3 px-4 text-center text-gray-500 text-xs">${theoRatio}%</td>
+                    <td class="py-3 px-4 text-center text-gray-700">${data.winCount}회</td>
+                    <td class="py-3 px-4 text-center"><span class="inline-flex px-2 py-1 rounded-full text-xs font-medium ${getColorClass(data.sum, data.winRatio)}">${data.winRatio.toFixed(1)}%</span></td>
+                    <td class="py-3 px-4 align-middle">
+                        <div class="w-full bg-gray-100 rounded-full h-2">
+                            <div class="${barColor} h-2 rounded-full transition-all duration-300" style="width: ${barWidth}%"></div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        function updateStatsRange(value) {
+            const maxVal = allDrawData.length || 1203;
+            const display = value >= maxVal ? `전체(${maxVal})` : value;
+            document.getElementById('statsRangeDisplay').textContent = display;
+            const slider = document.getElementById('statsRangeSlider');
+            const percent = ((value - 10) / (maxVal - 10)) * 100;
+            slider.style.setProperty('--value-percent', percent + '%');
+            loadStatsData(parseInt(value));
+        }
+        
+        function setStatsRange(value) {
+            const maxVal = allDrawData.length || 1203;
+            const safeValue = value > maxVal ? maxVal : value;
+            document.getElementById('statsRangeSlider').value = safeValue;
+            updateStatsRange(safeValue);
+        }
+        
+        function toggleSumFilter(sum, checked) {
+            console.log(`끝수합 ${sum}: ${checked ? '선택' : '해제'}`);
+        }
+        
+        // ✅ [핵심] 중요 태그별 색상 적용 함수
+        function formatAIResponse(text) {
+            if (!text) return "";
+            return text
+                .replace(/{{number:(.*?)}}/g, '<span class="text-red-600 bg-red-50 font-bold px-1 rounded">$1</span>')
+                .replace(/{{up:(.*?)}}/g, '<span class="text-green-600 bg-green-50 font-bold px-1 rounded">$1</span>')
+                .replace(/{{down:(.*?)}}/g, '<span class="text-orange-600 bg-orange-50 font-bold px-1 rounded">$1</span>')
+                .replace(/{{warn:(.*?)}}/g, '<span class="text-yellow-600 bg-yellow-50 font-bold px-1 rounded">$1</span>')
+                .replace(/{{good:(.*?)}}/g, '<span class="text-blue-600 bg-blue-50 font-bold px-1 rounded">$1</span>')
+                .replace(/{{range:(.*?)}}/g, '<span class="text-purple-600 bg-purple-50 font-bold px-1 rounded">$1</span>');
+        }
+
+        // ✅ AI 분석 실행 함수
+        async function refreshAIAnalysis() {
+            const aiContent = document.getElementById('aiAnalysisContent');
+            aiContent.innerHTML = `<div class="flex items-center gap-2 text-gray-500"><span class="material-symbols-outlined text-lg animate-spin">progress_activity</span><span>AI가 데이터를 심층 분석 중입니다...</span></div>`;
+
+            const data = allDrawData.slice(0, currentRange);
+            const recentDraws = data.slice(0, 10).map(d => `${d.round}회:${d.sum}`).join(', ');
+            const allSums = data.map(d => d.sum);
+            const avg = (allSums.reduce((a,b)=>a+b,0)/allSums.length).toFixed(1);
+            const min = Math.min(...allSums);
+            const max = Math.max(...allSums);
+
+            try {
+                // type='끝수합'
+                const { data: analysis, error } = await supabaseClient.functions.invoke('analyze-lotto', {
+                    body: { currentRange, avg, min, max, recentDraws, type: '끝수합' }
+                });
+
+                if (error) throw error;
+
+                // 결과 표시 (색상 적용)
+                aiContent.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-purple-600 text-2xl mt-1">trending_up</span>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-gray-900 mb-1">최근 트렌드 분석</h4>
+                                <p class="text-sm text-gray-700 leading-relaxed">${formatAIResponse(analysis.trend)}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-green-600 text-2xl mt-1">insights</span>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-gray-900 mb-1">분포 패턴 인사이트</h4>
+                                <p class="text-sm text-gray-700 leading-relaxed">${formatAIResponse(analysis.pattern)}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-blue-600 text-2xl mt-1">lightbulb</span>
+                            <div class="flex-1">
+                                <h4 class="font-bold text-gray-900 mb-1">AI 추천 범위</h4>
+                                <p class="text-sm text-gray-700 leading-relaxed">${formatAIResponse(analysis.recommendation)}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                console.error("AI 분석 실패:", err);
+                const errorMsg = err.message || "알 수 없는 오류";
+                aiContent.innerHTML = `<div class="text-red-500 flex items-center gap-2"><span class="material-symbols-outlined">error</span><div><p class="font-bold">분석에 실패했습니다.</p><p class="text-xs text-gray-400">(${errorMsg})</p></div></div>`;
+            }
+        }
+        
+        const observer = new MutationObserver(function(mutations) {
+            if (allDrawData.length > 0) {
+                refreshAIAnalysis();
+                observer.disconnect();
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    </script>
+</body>
+</html>
